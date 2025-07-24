@@ -1,0 +1,93 @@
+eth dst length: 74:d4:dd:28:65:51
+eth dst_resolved length: 74:d4:dd:28:65:51
+eth dst_oui length: 7656669
+eth dst_oui_resolved length: Quanta Computer Inc.
+eth addr length: 74:d4:dd:28:65:51
+eth addr_resolved length: 74:d4:dd:28:65:51
+eth addr_oui length: 7656669
+eth addr_oui_resolved length: Quanta Computer Inc.
+eth dst_lg length: False
+eth lg length: False
+eth dst_ig length: False
+eth ig length: False
+eth src length: 7c:e2:ca:b6:d7:f0
+eth src_resolved length: 7c:e2:ca:b6:d7:f0
+eth src_oui length: 8184522
+eth src_oui_resolved length: Juniper Networks
+eth src_lg length: False
+eth src_ig length: False
+eth type length: 0x0800
+eth trailer length: 00:00:24:05:ae:c7
+eth _ws_expert length: Expert Info (Note/Protocol): Didn't find padding of zeros, and an undecoded trailer exists. There may be padding of non-zeros.
+eth padding_bad length: Didn't find padding of zeros, and an undecoded trailer exists. There may be padding of non-zeros.
+eth _ws_expert_message length: Didn't find padding of zeros, and an undecoded trailer exists. There may be padding of non-zeros.
+eth _ws_expert_severity length: 4194304
+eth _ws_expert_group length: 150994944
+ip version length: 4
+ip hdr_len length: 20
+ip dsfield length: 0x00
+ip dsfield_dscp length: 0
+ip dsfield_ecn length: 0
+ip len length: 40
+ip id length: 0x8eef
+ip flags length: 0x00
+ip flags_rb length: False
+ip flags_df length: False
+ip flags_mf length: False
+ip frag_offset length: 0
+ip ttl length: 63
+ip proto length: 6
+ip checksum length: 0xcebd
+ip checksum_status length: 2
+ip src length: 23.246.55.147
+ip addr length: 23.246.55.147
+ip src_host length: 23.246.55.147
+ip host length: 23.246.55.147
+ip dst length: 172.17.34.137
+ip dst_host length: 172.17.34.137
+tcp srcport length: 443
+tcp dstport length: 56724
+tcp port length: 443
+tcp stream length: 39
+tcp completeness length: 15
+tcp completeness_rst length: False
+tcp completeness_fin length: False
+tcp completeness_data length: True
+tcp completeness_ack length: True
+tcp completeness_syn_ack length: True
+tcp completeness_syn length: True
+tcp completeness_str length: ··DASS
+tcp len length: 0
+tcp seq length: 1
+tcp seq_raw length: 2952500561
+tcp nxtseq length: 1
+tcp ack length: 688
+tcp ack_raw length: 2295280842
+tcp hdr_len length: 20
+tcp flags length: 0x0014
+tcp flags_res length: False
+tcp flags_ae length: False
+tcp flags_cwr length: False
+tcp flags_ece length: False
+tcp flags_urg length: False
+tcp flags_ack length: True
+tcp flags_push length: False
+tcp flags_reset length: True
+tcp _ws_expert length: Expert Info (Warning/Sequence): Connection reset (RST)
+tcp connection_rst length: Connection reset (RST)
+tcp _ws_expert_message length: Connection reset (RST)
+tcp _ws_expert_severity length: 6291456
+tcp _ws_expert_group length: 33554432
+tcp flags_syn length: False
+tcp flags_fin length: False
+tcp flags_str length: ·······A·R··
+tcp window_size_value length: 128
+tcp window_size length: 65536
+tcp window_size_scalefactor length: 512
+tcp checksum length: 0xaef6
+tcp checksum_status length: 2
+tcp urgent_pointer length: 0
+tcp  length: Timestamps
+tcp time_relative length: 0.093666000
+tcp time_delta length: 0.000154000
+
