@@ -7,6 +7,7 @@ class PacketEmbedding(nn.Module):
         self.token_embed = nn.Embedding(vocab_size, embed_dim)
         self.token_pos_embed = nn.Embedding(max_len, embed_dim)
         self.field_pos_embed = nn.Embedding(max_len, embed_dim)
+
         # check for dropout and embed in pytorch
         self.header_pos_embed = nn.Embedding(max_len, embed_dim)
         self.drop = nn.Dropout(dropout)
