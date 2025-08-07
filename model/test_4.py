@@ -8,7 +8,6 @@ from flow_encoder import FlowLevelEncoder
 import os
 import re
 import numpy as np
-from torch.utils.data import Dataset, DataLoader
 from field_header_pos_encoding import field_pos, header_pos
 
 # Hyperparameters
