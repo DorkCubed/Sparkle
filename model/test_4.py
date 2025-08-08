@@ -53,38 +53,6 @@ criterion = nn.CrossEntropyLoss()
 
 from torch.utils.data import Dataset, DataLoader
 
-# class PacketSequenceDataset(Dataset):
-#     def __init__(self, packet_seq_dir, field_pos_dir, header_pos_dir, tokenizer, batch_size_1):
-#         self.packet_seq_files = sorted([os.path.join(packet_seq_dir, file) for file in os.listdir(packet_seq_dir) if file.endswith('.txt')])
-#         self.field_pos_files = sorted([os.path.join(field_pos_dir, file) for file in os.listdir(field_pos_dir) if file.endswith('.txt')])
-#         self.header_pos_files = sorted([os.path.join(header_pos_dir, file) for file in os.listdir(header_pos_dir) if file.endswith('.txt')])
-#         self.tokenizer = tokenizer
-#         self.batch_size_1 = batch_size_1
-
-#     def __len__(self):
-#         return sum((len(open(file, 'r').readlines()) + self.batch_size_1 - 1) // self.batch_size_1 for file in self.packet_seq_files)
-
-#     def __getitem__(self, idx):
-#         # Determine which file and chunk index this sample corresponds to
-#         file_idx, line_idx = divmod(idx, len(self.packet_seq_files))
-#         packet_seq_file = self.packet_seq_files[file_idx]
-#         field_pos_file = self.field_pos_files[file_idx]
-#         header_pos_file = self.header_pos_files[file_idx]
-
-#         with open(packet_seq_file, 'r', encoding='utf-8') as f:
-#             hex_dumps = f.readlines()
-        
-#         padded_all_tokens, token_ids, mask, max_length = self.tokenizer.encode_packet(hex_dumps)
-        
-#         chunk_start = line_idx * self.batch_size_1
-#         chunk_end = min((line_idx + 1) * self.batch_size_1, token_ids.size(0))
-#         chunk = token_ids[chunk_start:chunk_end]
-        
-#         field_posn = field_pos(field_pos_file, chunk_start, chunk_end)
-#         header_posn = header_pos(header_pos_file, chunk_start, chunk_end)
-        
-#         return chunk, field_posn, header_posn, packet_seq_file
-
 class PacketSequenceDataset(Dataset):
     def __init__(self, packet_seq_dir, field_pos_dir, header_pos_dir, tokenizer, batch_size_1):
         self.packet_seq_files = sorted([os.path.join(packet_seq_dir, file) for file in os.listdir(packet_seq_dir) if file.endswith('.txt')])
@@ -121,26 +89,26 @@ class PacketSequenceDataset(Dataset):
 
         with open(packet_seq_file, 'r', encoding='utf-8') as f:
             hex_dumps = f.readlines()
-        
+
         padded_all_tokens, token_ids, mask, max_length = self.tokenizer.encode_packet(hex_dumps)
-        
+
         # Slice out the chunk from token_ids
         chunk_start = line_idx * self.batch_size_1
         chunk_end = min((line_idx + 1) * self.batch_size_1, token_ids.size(0))
         chunk = token_ids[chunk_start:chunk_end]
-        
+
         field_posn = field_pos(field_pos_file, chunk_start, chunk_end)
         header_posn = header_pos(header_pos_file, chunk_start, chunk_end)
-        
+
         return chunk, field_posn, header_posn, packet_seq_file
 
 
 # Create the dataset and data loader without shuffling
 dataset = PacketSequenceDataset(
-    packet_seq_dir='/home/satvik/spark/spark2/packets', 
-    field_pos_dir='/home/satvik/spark/spark2/fields', 
-    header_pos_dir='/home/satvik/spark/spark2/headers', 
-    tokenizer=tokenizer, 
+    packet_seq_dir='/home/satvik/spark/spark2/packets',
+    field_pos_dir='/home/satvik/spark/spark2/fields',
+    header_pos_dir='/home/satvik/spark/spark2/headers',
+    tokenizer=tokenizer,
     batch_size_1=batch_size_1
 )
 print("1")
@@ -152,7 +120,7 @@ train_loader = DataLoader(dataset, batch_size=1, shuffle=False)
 #     print("Packet Sequences:", packet_sequences.shape)
 #     print("Field Position:", field_position.shape)
 #     print("Header Position:", header_position.shape)
-#     print("File Name:", file_name) 
+#     print("File Name:", file_name)
 
 from torch.cuda.amp import autocast, GradScaler
 scaler = GradScaler('cuda')

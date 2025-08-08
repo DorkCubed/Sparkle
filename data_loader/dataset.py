@@ -1,10 +1,6 @@
-import torch
-from torch.utils.data import DataLoader, Dataset
-from model.embedding_new import FlowEmbedding
 import os
+from torch.utils.data import DataLoader, Dataset
 from encoder.positional_encodings import field_pos, header_pos
-from tokenizer.tokenizer import Tokenizer
-from config import Config
 
 class PacketSequenceDataset(Dataset):
     def __init__(self, packet_folder, field_folder, header_folder, tokenizer, chunk_size):
@@ -58,46 +54,3 @@ class PacketSequenceDataset(Dataset):
         header_position = header_pos(header_pos_file, chunk_start, chunk_end)
 
         return chunk, field_position, header_position, packet_seq
-
-
-class DataModule:
-    def __init__(self):
-        self.config = Config()
-        self.tokenizer = self._load_tokenizer()
-        self.dataset = self._init_dataset()
-        self.train_loader = self._init_dataloader()
-
-    def _load_tokenizer(self):
-        return Tokenizer(vocab_file=self.config.tokenizer_path)
-
-    def _init_dataset(self):
-        return PacketSequenceDataset(packet_folder, header_folder, fields_folder, self.tokenizer, chunk_size=32)
-
-    def _init_dataloader(self):
-        return DataLoader(self.dataset, batch_size=self.config.chunk_size, shuffle=False, num_workers=self.config.num_workers)
-
-    def _get_loader(self):
-        return self.train_loader
-
-
-if __name__ == '__main__':
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    data_module = DataModule()
-
-    tokenizer = data_module.tokenizer
-
-    bucket = 'netml-s3-bucket'
-    packet_folder = 'Working_folder/input_aws/split/packets'
-    header_folder = 'Working_folder/input_aws/split/headers'
-    fields_folder = 'Working_folder/input_aws/split/fields'
-    direction_folder = 'Working_folder/input_aws/split/direction'
-
-    dataset = PacketSequenceDataset(packet_folder, header_folder, fields_folder, tokenizer, chunk_size=32)
-    train_loader = DataLoader(dataset, batch_size=1, shuffle=False)
-
-
-
-
-
-
-
