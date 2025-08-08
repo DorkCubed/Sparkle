@@ -10,6 +10,7 @@
       <excludeFolder url="file://$MODULE_DIR$/dataset/fields" />
       <excludeFolder url="file://$MODULE_DIR$/dataset/headers" />
       <excludeFolder url="file://$MODULE_DIR$/dataset/packets" />
+      <excludeFolder url="file://$MODULE_DIR$/.venv" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.12 virtualenv at ~/projects/Sparkle/.venv" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />

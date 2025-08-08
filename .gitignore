@@ -3,4 +3,7 @@ __pycache__/
 *.py[cod]
 
 .venv/
-*.egg-info/
+*.egg-info/.idea
+uv.lock
+pyproject.toml
+.python-version
