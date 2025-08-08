@@ -22,4 +22,4 @@ class Config:
         self.mask_prob = 0.15
         self.num_epochs = 1
         self.max_len = 578  # 512
-        self.chunk_size = 2
+        self.chunk_size = 2 # earlier batch_size_1
