@@ -33,7 +33,7 @@ def train(args):
         tokenizer=tokenizer
     )
     train_loader = DataLoader(
-        dataset, batch_size=args.batch_size, shuffle=True)
+        dataset, batch_size=args.chunk_size, shuffle=True)
 
     # Initialize model
     model = BERTModel(
