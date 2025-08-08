@@ -4,14 +4,10 @@ from model.embedding_new import FlowEmbedding
 import os
 from encoder.positional_encodings import field_pos, header_pos
 from tokenizer.tokenizer import Tokenizer
-import torch.nn as nn
-import boto3
-import logging
-
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+from config import Config
 
 class PacketSequenceDataset(Dataset):
-    def __init__(self, packet_folder, field_folder, header_folder, tokenizer, batch_size):
+    def __init__(self, packet_folder, field_folder, header_folder, tokenizer, chunk_size):
         self.packet_seq = sorted(
             [os.path.join(packet_folder, file) for file in os.listdir(packet_folder) if file.endswith('.txt')])
         self.field_pos_files = sorted(
@@ -21,13 +17,13 @@ class PacketSequenceDataset(Dataset):
         self.tokenizer = tokenizer
 
         # packets per sample returned in the dataset
-        self.batch_size = batch_size
+        self.chunk_size = chunk_size
 
         self.total_chunks = []
 
         for file in self.packet_seq:
             num_lines = len(open(file, 'r').readlines())
-            num_chunks = (num_lines + self.batch_size - 1) // self.batch_size
+            num_chunks = (num_lines + self.chunk_size - 1) // self.chunk_size
             self.total_chunks.append(num_chunks)
         self.total_len = sum(self.total_chunks)
 
@@ -54,8 +50,8 @@ class PacketSequenceDataset(Dataset):
         padded_all_tokens, token_ids, mask, max_length = self.tokenizer.encode_packet(hex_dumps)
 
         # Slice out the chunk from token_ids
-        chunk_start = line_idx * self.batch_size
-        chunk_end = min((line_idx + 1) * self.batch_size, token_ids.size(0))
+        chunk_start = line_idx * self.chunk_size
+        chunk_end = min((line_idx + 1) * self.chunk_size, token_ids.size(0))
         chunk = token_ids[chunk_start:chunk_end]
 
         field_position = field_pos(field_pos_file, chunk_start, chunk_end)
@@ -64,51 +60,39 @@ class PacketSequenceDataset(Dataset):
         return chunk, field_position, header_position, packet_seq
 
 
-class FlowLevelTrainer:
-    def __init__(self, flow_embedding):
-        self.flow_embedding = flow_embedding
-        flow_embedding = FlowEmbedding(embed_dim, max_flow_length, dropout, vocab).to(device)
+class DataModule:
+    def __init__(self):
+        self.config = Config()
+        self.tokenizer = self._load_tokenizer()
+        self.dataset = self._init_dataset()
+        self.train_loader = self._init_dataloader()
 
-    def process_encodings(encodings, packet_number, direction_folder):
-        """ Process accumulated encodings and load corresponding direction data. """
-        final_packet_encodings = torch.cat(encodings, dim=0).to(device)
-        print("Final concatenated shape:", final_packet_encodings.shape)
+    def _load_tokenizer(self):
+        return Tokenizer(vocab_file=self.config.tokenizer_path)
 
-        # Load the corresponding direction data from the text file
-        direction_file_name = f'direction_{packet_number}.txt'
-        direction_file_path = os.path.join(direction_folder, direction_file_name)
+    def _init_dataset(self):
+        return PacketSequenceDataset(packet_folder, header_folder, fields_folder, self.tokenizer, chunk_size=32)
 
-        with open(direction_file_path, 'r') as file:
-            direction_data = [int(line.strip()) for line in file.readlines()]
+    def _init_dataloader(self):
+        return DataLoader(self.dataset, batch_size=self.config.chunk_size, shuffle=False, num_workers=self.config.num_workers)
 
-        # Convert direction data to a tensor
-        direction_tensor = torch.tensor(direction_data, device=device)
-        print(final_packet_encodings.device, direction_tensor.device)
-        # Call FlowEmbedding with the accumulated packet encodings and direction data
-        flow_embeddings, pad_indices = flow_embedding(final_packet_encodings, direction_tensor)
-        print("Flow embeddings computed for packet:", packet_number)
-        print("flow embeddings: ", flow_embeddings.shape)
-        print("-------------------------------------------------------------")
-
-        # Compute flow encoding and MPM loss
-        flow_encoding, mpm_loss = flow_encoder(flow_embeddings, pad_indices)
-
-        # Ensure mpm_loss is a tensor and on the same device
-        mpm_loss_tensor = mpm_loss[0].to(device)
-        print(mpm_loss_tensor)
-        return mpm_loss_tensor
-
+    def _get_loader(self):
+        return self.train_loader
 
 
 if __name__ == '__main__':
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    data_module = DataModule()
+
+    tokenizer = data_module.tokenizer
+
     bucket = 'netml-s3-bucket'
     packet_folder = 'Working_folder/input_aws/split/packets'
     header_folder = 'Working_folder/input_aws/split/headers'
     fields_folder = 'Working_folder/input_aws/split/fields'
     direction_folder = 'Working_folder/input_aws/split/direction'
 
-    tokenizer = Tokenizer(vocab_file=os.path.join("tokenizer", "vocab.txt"))
-    dataset = PacketSequenceDataset(packet_folder, header_folder, fields_folder, tokenizer, batch_size=32)
+    dataset = PacketSequenceDataset(packet_folder, header_folder, fields_folder, tokenizer, chunk_size=32)
     train_loader = DataLoader(dataset, batch_size=1, shuffle=False)
 
 
