@@ -3,12 +3,15 @@ import os
 class Config:
     def __init__(self):
         bucket = 'netml-s3-bucket'
-        self.packet_folder = 'Working_folder/input_aws/split/packets'
-        self.header_folder = 'Working_folder/input_aws/split/headers'
-        self.fields_folder = 'Working_folder/input_aws/split/fields'
-        self.direction_folder = 'Working_folder/input_aws/split/direction'
+        current_dir = os.path.dirname(__file__)
+        parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir))
 
-        self.tokenizer_path = os.path.join("tokenizer", "vocab.txt")
+        self.packet_folder = os.path.join(parent_dir, "dataset", "packets")
+        self.header_folder = os.path.join(parent_dir, "dataset", "headers")
+        self.fields_folder = os.path.join(parent_dir, "dataset", "fields")
+        self.direction_folder = os.path.join(parent_dir, "dataset", "directions")
+
+        self.tokenizer_path = os.path.join(current_dir, "tokenizer", "vocab.txt")
 
         self.batch_size = 1
         self.shuffle = False
