@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+from ..config import Config
+import os
 
 class Tokenizer:
     def __init__(self, vocab_file):
@@ -120,17 +122,22 @@ class Tokenizer:
 
     #     return encoded_flow
 
-# custom_vocab_path = r"C:\Users\Kavish\OneDrive\Desktop\SPARKLE\Custom-Vocab.txt"
 
-# input_file = []
-# with open(r"C:\Users\Kavish\OneDrive\Desktop\SPARKLE\Input-Hex-Dump.txt", 'r') as file:
-#     for line in file:
-#         # Assuming each line in the file contains a hex dump
-#         input_file.append(line.strip())
 
-# tokenizer = Tokenizer(vocab_file=custom_vocab_path)
-# encoded_values, token_ids, mask = tokenizer.encode_packet(input_file)
+if __name__ == '__main__':
+    config = Config()
+    custom_vocab_path = config.tokenizer_path
+    packet_folder = config.packet_folder
 
-# print(encoded_values)
-# print(token_ids)
-# print(mask)
+    input_file = []
+    with open(os.path.join(packet_folder, "packet_0.txt"), 'r') as file:
+        for line in file:
+            # Assuming each line in the file contains a hex dump
+            input_file.append(line.strip())
+
+    tokenizer = Tokenizer(vocab_file=custom_vocab_path)
+    encoded_values, token_ids, mask, _ = tokenizer.encode_packet(input_file)
+
+    print(encoded_values)
+    print(token_ids)
+    print(mask)
