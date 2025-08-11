@@ -1,6 +1,6 @@
 import os
 from torch.utils.data import DataLoader, Dataset
-from encoder.positional_encodings import field_pos, header_pos
+from .encoder.positional_encodings import field_pos, header_pos
 
 class PacketSequenceDataset(Dataset):
     def __init__(self, packet_folder, field_folder, header_folder, tokenizer, chunk_size):
