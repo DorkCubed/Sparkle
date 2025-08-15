@@ -1,15 +1,19 @@
 import os
+from os.path import split
+
+from scripts.s3_utils import S3DataFetcher
 
 class Config:
     def __init__(self):
         bucket = 'netml-s3-bucket'
         current_dir = os.path.dirname(__file__)
+        split_folder = "split"
         parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir))
 
-        self.packet_folder = os.path.join(parent_dir, "dataset", "packets")
-        self.header_folder = os.path.join(parent_dir, "dataset", "headers")
-        self.fields_folder = os.path.join(parent_dir, "dataset", "fields")
-        self.direction_folder = os.path.join(parent_dir, "dataset", "directions")
+        parents = [f"{bucket}/Working_folder/input_aws/Wireshark_Sample_PCAPs/split/", f"{bucket}/Working_folder/input_aws/"]
+
+        self.fetcher = S3DataFetcher(bucket)
+        self.files = self.fetcher.list_split_objects(parents, split=split_folder)
 
         self.tokenizer_path = os.path.join(current_dir, "tokenizer", "vocab.txt")
 
