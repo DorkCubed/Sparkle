@@ -53,7 +53,7 @@ if __name__ == '__main__':
 
     tokenizer = data_module.tokenizer
 
-    dataset = PacketSequenceDataset(config.packet_folder, config.header_folder, config.fields_folder, tokenizer, chunk_size=32)
+    dataset = PacketSequenceDataset(config=config, s3_fetcher=config.fetcher, files=config.files, tokenizer=tokenizer, chunk_size=config.chunk_size)
     train_loader = DataLoader(dataset, batch_size=1, shuffle=False)
 
     test_data_loader(train_loader, 3)
