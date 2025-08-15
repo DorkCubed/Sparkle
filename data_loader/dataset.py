@@ -1,16 +1,19 @@
 import os
 from torch.utils.data import DataLoader, Dataset
 from .encoder.positional_encodings import field_pos, header_pos
+from config import Config
 
 class PacketSequenceDataset(Dataset):
-    def __init__(self, packet_folder, field_folder, header_folder, tokenizer, chunk_size):
+    def __init__(self, config: Config, packet_folder, field_folder, header_folder, tokenizer, chunk_size):
+        self.tokenizer = tokenizer
+        self.config = config
+
         self.packet_seq = sorted(
             [os.path.join(packet_folder, file) for file in os.listdir(packet_folder) if file.endswith('.txt')])
         self.field_pos_files = sorted(
             [os.path.join(field_folder, file) for file in os.listdir(field_folder) if file.endswith('.txt')])
         self.header_pos_files = sorted(
             [os.path.join(header_folder, file) for file in os.listdir(header_folder) if file.endswith('.txt')])
-        self.tokenizer = tokenizer
 
         # packets per sample returned in the dataset
         self.chunk_size = chunk_size
@@ -26,7 +29,21 @@ class PacketSequenceDataset(Dataset):
     def __len__(self):
         return self.total_len
 
+
     def __getitem__(self, idx):
+        """
+        Retrieve a chunk from the dataset given an index.
+
+        Args:
+            idx (int): Index of the chunk to retrieve.
+
+        Returns:
+            tuple: A tuple containing the chunk token IDs, field positional encoding, header positional encoding, and the path to the packet file containing the chunk.
+                - chunk (torch.Tensor): Tensor of shape (chunk_size, max_length) containing the chunk token IDs.
+                - field_position (torch.Tensor): Tensor of shape (chunk_size, max_length) containing the field positional encoding.
+                - header_position (torch.Tensor): Tensor of shape (chunk_size, max_length) containing the header positional encoding.
+                - packet_seq (str): Path to the packet file containing the chunk.
+        """
         cumulative_chunks = 0
         for file_idx, num_chunks in enumerate(self.total_chunks):
             if cumulative_chunks + num_chunks > idx:
