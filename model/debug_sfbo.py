@@ -31,5 +31,5 @@ data_tensor_f = torch.tensor(data_np_reshaped_f, dtype=torch.int)
 print("Tensor shape:", data_tensor_f.shape)
 print("Tensor data:\n", data_tensor_f)
 
-def apply_sfbo_masking(packet_seq, max_span_lenth=6, padding_value=0):
-    valid_indices = 
+# def apply_sfbo_masking(packet_seq, max_span_lenth=6, padding_value=0):
+#     valid_indices =
