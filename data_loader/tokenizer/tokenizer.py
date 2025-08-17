@@ -1,6 +1,5 @@
 import torch
-import torch.nn as nn
-from ..config import Config
+from configs.config import Config
 import os
 
 class Tokenizer:

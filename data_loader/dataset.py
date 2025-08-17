@@ -1,7 +1,6 @@
-import os
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import Dataset
 from .encoder.positional_encodings import field_pos, header_pos
-from config import Config
+from configs.config import Config
 from scripts.s3_utils import S3DataFetcher
 
 class PacketSequenceDataset(Dataset):

@@ -1,7 +1,7 @@
 import os
 from os.path import split
 
-from scripts.s3_utils import S3DataFetcher
+from data_loader.scripts.s3_utils import S3DataFetcher
 
 class Config:
     def __init__(self):

@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import DataLoader
 from .dataset import PacketSequenceDataset
-from .config import Config
+from configs.config import Config
 from .tokenizer.tokenizer import Tokenizer
 from scripts.s3_utils import S3DataFetcher
 
