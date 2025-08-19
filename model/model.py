@@ -1,4 +1,3 @@
-import torch
 import torch.nn as nn
 from embedding_new import PacketEmbedding, FlowEmbedding
 from packet_encoder import PacketLevelEncoder
