@@ -1,14 +1,14 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from Input_Tokenizer import Tokenizer
-from embedding_new import PacketEmbedding, FlowEmbedding
-from packet_encoder import PacketLevelEncoder
-from flow_encoder import FlowLevelEncoder
+from ..Input_Tokenizer import Tokenizer
+from ..embedding_new import PacketEmbedding, FlowEmbedding
+from ..packet_encoder import PacketLevelEncoder
+from ..flow_encoder import FlowLevelEncoder
 import os
 import re
 import numpy as np
-from field_header_pos_encoding import field_pos, header_pos
+from data_loader.encoder.positional_encodings import field_pos, header_pos
 
 # Hyperparameters
 vocab_size = 262

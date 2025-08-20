@@ -51,11 +51,48 @@ def list_s3_folders(bucket_name, prefix):
     logger.info(f"Total folders found: {len(folders)}")
     return folders
 
+
+def list_s3_folders_recursive(bucket_name, prefix):
+    """
+    Recursively lists all folders under the given prefix in an S3 bucket.
+
+    Args:
+        bucket_name (str): Name of the S3 bucket
+        prefix (str): The folder path prefix to search within
+
+    Returns:
+        list: List of all folder paths found recursively
+    """
+    s3 = boto3.client('s3')
+    folders = []
+
+    def _list_folders(current_prefix):
+        paginator = s3.get_paginator('list_objects_v2')
+        page_iterator = paginator.paginate(
+            Bucket=bucket_name,
+            Prefix=current_prefix,
+            Delimiter='/'
+        )
+
+        for page in page_iterator:
+            # Add current level folders
+            for cp in page.get('CommonPrefixes', []):
+                folder_name = cp['Prefix']
+                folders.append(folder_name)
+                logger.info(f"Found folder: {folder_name}")
+                # Recursively list subfolders
+                _list_folders(folder_name)
+
+    logger.info(f"Starting recursive folder listing in bucket '{bucket_name}' with prefix '{prefix}'")
+    _list_folders(prefix)
+    logger.info(f"Total folders found: {len(folders)}")
+    return folders
+
 # Example usage
 if __name__ == "__main__":
     bucket = 'netml-s3-bucket'
-    folder = 'Working_folder/input_aws/split/'  # Include trailing slash if needed
-    folders = list_s3_folders(bucket, folder)
+    folder = 'Working_folder/input_aws/Wireshark_Sample_PCAPs/split/'  # Include trailing slash if needed
+    folders = list_s3_folders_recursive(bucket, folder)
     print("Folders:")
-    for f in folders:
+    for f in sorted(folders):
         print(f)

@@ -12,8 +12,6 @@ class PacketSequenceDataset(Dataset):
 
         # packets per sample returned in the dataset
         self.chunk_size = chunk_size
-
-
         self.total_chunks = []
         for packet_path, _, _, _ in self.files:
             num_lines = len(self.s3_fetcher.read_files(packet_path).splitlines())
