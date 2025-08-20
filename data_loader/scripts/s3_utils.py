@@ -24,9 +24,9 @@ class S3DataFetcher:
             base_path = f"{self.bucket_name}/{parent}/{split}"
 
             packet_files = sorted(self.fs.glob(f"{base_path}/packets/*.txt"))
-            header_files = sorted(self.fs.glob(f"{base_path}/headers/*.txt"))
+            header_files = sorted(self.fs.glob(f"{base_path}/header/*.txt"))
             field_files = sorted(self.fs.glob(f"{base_path}/fields/*.txt"))
-            direction_files = sorted(self.fs.glob(f"{base_path}/directions/*.txt"))
+            direction_files = sorted(self.fs.glob(f"{base_path}/direction/*.txt"))
 
             for p, h, f, d in zip(packet_files, header_files, field_files, direction_files):
                 files.append((p, h, f, d))
