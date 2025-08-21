@@ -9,8 +9,8 @@ class DataModule:
     def __init__(self):
         self.config = Config()
         self.tokenizer = self._load_tokenizer()
-        self.s3_fetcher = S3DataFetcher(bucket_name=self.config.bucket_name)
-        self.files = self.s3_fetcher.list_split_objects(self.config.parents, self.config.split)
+        self.s3_fetcher = S3DataFetcher(bucket_name=self.config.bucket)
+        self.files = self.s3_fetcher.list_split_objects(self.config.parents, self.config.split_folder)
         self.dataset = self._init_dataset()
         self.train_loader = self._init_dataloader()
 

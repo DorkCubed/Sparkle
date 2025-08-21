@@ -5,15 +5,15 @@ from data_loader.scripts.s3_utils import S3DataFetcher
 
 class Config:
     def __init__(self):
-        bucket = 'netml-s3-bucket'
+        self.bucket = 'netml-s3-bucket'
         current_dir = os.path.dirname(__file__)
-        split_folder = "split"
+        self.split_folder = "split"
         parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir))
 
-        parents = [f"{bucket}/Working_folder/input_aws/Wireshark_Sample_PCAPs/split/", f"{bucket}/Working_folder/input_aws/"]
+        self.parents = [f"{self.bucket}/Working_folder/input_aws/Wireshark_Sample_PCAPs/split/", f"{self.bucket}/Working_folder/input_aws/"]
 
-        self.fetcher = S3DataFetcher(bucket)
-        self.files = self.fetcher.list_split_objects(parents, split=split_folder)
+        self.fetcher = S3DataFetcher(self.bucket)
+        self.files = self.fetcher.list_split_objects(self.parents, split=self.split_folder)
 
         self.tokenizer_path = os.path.join(current_dir, "tokenizer", "vocab.txt")
 
