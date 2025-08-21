@@ -42,33 +42,38 @@ class S3DataFetcher:
                 files.append((p, h, f, d))
         return files
 
-    def build_manifest(self, parent):
+    def build_manifest(self, parents):
         manifest = []
 
-        flows = self.fs.ls(parent)
+        total_flows = 0
+        for parent in parents:
+            flows = self.fs.ls(parent)
+            total_flows += len(flows)
 
-        logger.info(f"Found {len(flows)} flow directories under {parent}")
+        logger.info(f"Found total {len(total_flows)} flow directories under {parents}")
+        for parent in parents:
+            flows = self.fs.ls(parent)
+            logger.info(f"Found {len(flows)} flow directories under {parent}")
 
-        for i, flow in enumerate(flows):
-            if not self.fs.isdir(flow):
-                continue
+            for i, flow in enumerate(flows):
+                if not self.fs.isdir(flow):
+                    continue
 
-            logger.info(f"[{i}/{len(flows)}] Processing flow: {flow}")
+                logger.info(f"[{i}/{len(flows)}] Processing flow: {flow}")
 
-            packets = self.fs.glob(f"{flow}/packets/*.txt")
-            headers = self.fs.glob(f"{flow}/header/*.txt")
-            fields = self.fs.glob(f"{flow}/fields/*.txt")
-            directions = self.fs.glob(f"{flow}/direction/*.txt")
+                packets = self.fs.glob(f"{flow}/packets/*.txt")
+                headers = self.fs.glob(f"{flow}/header/*.txt")
+                fields = self.fs.glob(f"{flow}/fields/*.txt")
+                directions = self.fs.glob(f"{flow}/direction/*.txt")
 
-
-            for p, h, f, d in zip(sorted(packets), sorted(headers), sorted(fields), sorted(directions)):
-                manifest.append({
-                    "flow": os.path.basename(flow),
-                    "packet": p,
-                    "header": h,
-                    "field": f,
-                    "direction": d
-                })
+                for p, h, f, d in zip(sorted(packets), sorted(headers), sorted(fields), sorted(directions)):
+                    manifest.append({
+                        "flow": os.path.basename(flow),
+                        "packet": p,
+                        "header": h,
+                        "field": f,
+                        "direction": d
+                    })
 
         return manifest
 
@@ -88,7 +93,8 @@ class S3DataFetcher:
 
 if __name__ == "__main__":
     bucket_name = "netml-s3-bucket"
-    folder = 'Working_folder/input_aws/Wireshark_Sample_PCAPs/split'
+    folder1 = 'Working_folder/input_aws/Wireshark_Sample_PCAPs/split'
+    folder2 = 'Working_folder/input_aws'
     fetcher = S3DataFetcher(bucket_name)
-    manifest = fetcher.build_manifest(parent=f"s3://{bucket_name}/{folder}")
+    manifest = fetcher.build_manifest(parents=[f"s3://{bucket_name}/{folder1}", f"s3://{bucket_name}/{folder2}"])
     fetcher.save_manifest_to_json(manifest, 'manifest.json')
