@@ -8,3 +8,4 @@ uv.lock
 pyproject.toml
 .python-version
 .idea
+dataset/manifest.json
