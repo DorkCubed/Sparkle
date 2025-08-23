@@ -88,41 +88,6 @@ class Tokenizer:
 
         return encoded_flow
 
-    # def encode_flow(self, cls_packet_embeddings):
-    #     # defining the cls token with its embedding
-    #     clsf_embedding = nn.Embedding(1, embedding_dim=128)
-    #     clsf_token_embedding = clsf_embedding(torch.zeros(
-    #         cls_packet_embeddings.size(0), dtype=torch.long))
-
-    #     # Extract [CLS_p] token embeddings
-    #     cls_packet_embeddings = cls_packet_embeddings[:, 0, :]
-
-    #     # then adding it to cls_packet_embedding
-    #     cls_packet_embeddings = torch.cat(
-    #         [clsf_token_embedding, cls_packet_embeddings], dim=1)
-
-    #     # Split the sequence into fractions of 510 tokens
-    #     fraction_size = 510
-    #     fractions = [cls_packet_embeddings[:, i:i+fraction_size]
-    #                  for i in range(0, cls_packet_embeddings.size(1), fraction_size)]
-
-    #     # Add [SEP] token embedding after every 510 tokens
-    #     sep_embedding = nn.Embedding(1, embedding_dim=128)
-    #     sep_token_embedding = sep_embedding(torch.zeros(
-    #         cls_packet_embeddings.size(0), dtype=torch.long))
-
-    #     encoded_flow = []
-    #     for fraction in fractions:
-    #         encoded_flow.append(
-    #             torch.cat([fraction, sep_token_embedding.unsqueeze(1)], dim=1))
-
-    #     # Concatenate all chunks
-    #     encoded_flow = torch.cat(encoded_flow, dim=1)
-
-    #     return encoded_flow
-
-
-
 if __name__ == '__main__':
     config = Config()
     custom_vocab_path = config.tokenizer_path
