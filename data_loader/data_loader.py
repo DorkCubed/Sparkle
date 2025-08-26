@@ -9,8 +9,6 @@ class DataModule:
     def __init__(self):
         self.config = Config()
         self.tokenizer = self._load_tokenizer()
-        self.s3_fetcher = S3DataFetcher(bucket_name=self.config.bucket)
-        self.files = self.s3_fetcher.list_split_objects(self.config.parents, self.config.split_folder)
         self.dataset = self._init_dataset()
         self.train_loader = self._init_dataloader()
 
@@ -20,8 +18,7 @@ class DataModule:
     def _init_dataset(self):
         return PacketSequenceDataset(
             config=self.config,
-            s3_fetcher=self.s3_fetcher,
-            files=self.files,
+            manifest_path=self.config.manifest_path,
             tokenizer=self.tokenizer,
             chunk_size=self.config.chunk_size
         )
@@ -34,6 +31,13 @@ class DataModule:
 
 
 def test_data_loader(data_loader, num_batches=2):
+    """
+    Test a data loader by iterating over it and printing out the first num_batches.
+
+    Args:
+        data_loader (DataLoader): A PyTorch DataLoader object.
+        num_batches (int): The number of batches to print out. Defaults to 2.
+    """
     for i, (packet_sequences, field_position, header_position, packet_seq_file_name) in enumerate(data_loader):
         print(f"\nBatch {i+1}")
         print(f"Packet Sequences shape: {packet_sequences.shape}")
