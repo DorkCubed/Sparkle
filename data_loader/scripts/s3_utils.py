@@ -50,7 +50,7 @@ class S3DataFetcher:
             flows = self.fs.ls(parent)
             total_flows += len(flows)
 
-        logger.info(f"Found total {len(total_flows)} flow directories under {parents}")
+        logger.info(f"Found total {total_flows} flow directories under {parents}")
         for parent in parents:
             flows = self.fs.ls(parent)
             logger.info(f"Found {len(flows)} flow directories under {parent}")
@@ -97,4 +97,10 @@ if __name__ == "__main__":
     folder2 = 'Working_folder/input_aws'
     fetcher = S3DataFetcher(bucket_name)
     manifest = fetcher.build_manifest(parents=[f"s3://{bucket_name}/{folder1}", f"s3://{bucket_name}/{folder2}"])
-    fetcher.save_manifest_to_json(manifest, 'manifest.json')
+
+    current_dir = os.path.dirname(__file__)
+    project_dir = os.path.abspath(os.path.join(current_dir, os.pardir, os.pardir))
+    manifest_path = os.path.join(project_dir, "manifest", "manifest.json")
+
+    fetcher.save_manifest_to_json(manifest, manifest_path)
+

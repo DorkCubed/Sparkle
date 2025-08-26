@@ -16,7 +16,7 @@ class Config:
         self.files = self.fetcher.list_split_objects(self.parents, split=self.split_folder)
 
         self.tokenizer_path = os.path.join(current_dir, "tokenizer", "vocab.txt")
-
+        self.manifest_path = os.path.join(parent_dir, "dataset", "manifest", "manifest.json")
         self.batch_size = 1
         self.shuffle = False
 

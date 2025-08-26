@@ -15,6 +15,25 @@ class Tokenizer:
             return vocab
 
     def encode_packet(self, input_file):
+        """
+        Encode a list of hex dumps into a list of padded tokens.
+
+        Parameters
+        ----------
+        input_file : list of str
+            A list of hex dumps.
+
+        Returns
+        -------
+        padded_all_tokens : list of list of str
+            A list of padded tokens.
+        token_ids : torch.Tensor
+            A tensor of token IDs.
+        mask : torch.Tensor
+            A tensor of mask values.
+        max_length : int
+            The maximum length of the padded tokens.
+        """
         all_tokens = []
         for hex_dump in input_file:
             tokens = []
@@ -40,6 +59,20 @@ class Tokenizer:
         return tokens
 
     def encode_flow(self, cls_packet_embeddings):
+        """
+        Encode a tensor of packet embeddings into a tensor of flow embeddings.
+
+        Parameters
+        ----------
+        cls_packet_embeddings : torch.Tensor
+            A tensor of packet embeddings, shape [num_packets, embed_dim].
+
+        Returns
+        -------
+        encoded_flow : torch.Tensor
+            A tensor of flow embeddings, shape [num_chunks, 512, embed_dim].
+        """
+
         # Ensure embeddings are on the same device as cls_packet_embeddings
         device = cls_packet_embeddings.device
 
