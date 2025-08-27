@@ -1,10 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from ..Input_Tokenizer import Tokenizer
-from ..embedding import PacketEmbedding, FlowEmbedding
-from ..packet_encoder import PacketLevelEncoder
-from ..flow_encoder import FlowLevelEncoder
+from model.Input_Tokenizer import Tokenizer
+from model.embedding import PacketEmbedding, FlowEmbedding
+from model.packet_encoder import PacketLevelEncoder
+from model.flow_encoder import FlowLevelEncoder
 import os
 import re
 import numpy as np
@@ -127,6 +127,7 @@ scaler = GradScaler('cuda')
 
 direction_dir = "/home/satvik/spark/spark2/direction"
 print("2")
+
 def process_encodings(encodings, packet_number):
     """ Process accumulated encodings and load corresponding direction data. """
     final_packet_encodings = torch.cat(encodings, dim=0).to(device)
