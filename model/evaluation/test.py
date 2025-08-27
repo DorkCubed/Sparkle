@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from ..Input_Tokenizer import Tokenizer
-from ..embedding_new import PacketEmbedding, FlowEmbedding
+from ..embedding import PacketEmbedding, FlowEmbedding
 from ..packet_encoder import PacketLevelEncoder
 from ..flow_encoder import FlowLevelEncoder
 import os
