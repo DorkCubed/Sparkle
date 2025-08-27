@@ -1,5 +1,5 @@
 import torch.nn as nn
-from embedding_new import PacketEmbedding, FlowEmbedding
+from embedding import PacketEmbedding, FlowEmbedding
 from packet_encoder import PacketLevelEncoder
 from flow_encoder import FlowLevelEncoder
 from Input_Tokenizer import Tokenizer
