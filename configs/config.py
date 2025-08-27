@@ -12,8 +12,9 @@ class Config:
 
         self.parents = [f"{self.bucket}/Working_folder/input_aws/Wireshark_Sample_PCAPs/split/", f"{self.bucket}/Working_folder/input_aws/"]
 
-        self.fetcher = S3DataFetcher(self.bucket)
-        self.files = self.fetcher.list_split_objects(self.parents, split=self.split_folder)
+        # might potentially take time
+        self.fetcher = None
+        self.files = None
 
         self.tokenizer_path = os.path.join(current_dir, "tokenizer", "vocab.txt")
         self.manifest_path = os.path.join(parent_dir, "dataset", "manifest", "manifest.json")
@@ -30,3 +31,11 @@ class Config:
         self.num_epochs = 1
         self.max_len = 578  # 512
         self.chunk_size = 2 # earlier batch_size_1
+        self.learning_rate = 0.001
+
+    def initialize_data_fetcher(self):
+        """Call this when you actually need the data"""
+        if self.fetcher is None:
+            from data_loader.scripts.s3_utils import S3DataFetcher
+            self.fetcher = S3DataFetcher(self.bucket)
+            self.files = self.fetcher.list_split_objects(self.parents, split=self.split_folder)

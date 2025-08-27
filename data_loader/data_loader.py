@@ -29,7 +29,6 @@ class DataModule:
     def get_loader(self):
         return self.train_loader
 
-
 def test_data_loader(data_loader, num_batches=2):
     """
     Test a data loader by iterating over it and printing out the first num_batches.
