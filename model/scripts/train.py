@@ -9,26 +9,20 @@ from torch.cuda.amp import GradScaler
 from configs.config import Config
 from model.scripts.test import flow_embedding
 
-
-class HierarchicalBERTTrainer:
-    def __init__(self):
-        data_module = DataModule()
-
-
 class PacketLevelTrainer:
-    def __init__(self):
+    def __init__(self, packet_embedding, packet_encoder, flow_embedding, flow_encoder):
         data_module = DataModule()
         self.config = Config()
         self.vocab = self._init_vocab()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+        self.packet_embedding = packet_embedding.to(self.device)
+        self.packet_encoder = packet_encoder.to(self.device)
+        self.flow_embedding = flow_embedding.to(self.device)
+        self.flow_encoder = flow_encoder.to(self.device)
+
         self.train_loader = data_module.get_loader()
 
-        self.packet_embedding = PacketEmbedding(self.config.vocab_size, max_len=self.config.max_len, embed_dim=self.config.embed_dim, dropout=self.config.dropout).to(self.device)
-        self.packet_encoder = PacketLevelEncoder(self.config.vocab_size, self.config.embed_dim, self.config.max_len, self.config.num_heads, self.config.num_layers, self.config.dropout).to(self.device)
-
-        self.flow_embedding = FlowEmbedding(self.config.embed_dim, self.config.max_flow_length, self.config.dropout, self.vocab).to(self.device)
-        self.flow_encoder = FlowLevelEncoder(self.config.embed_dim, self.config.num_layers, self.config.num_heads, self.config.dropout, self.config.max_flow_length, self.config.mask_prob).to(self.device)
 
         self.optimizer = optim.Adam(list(self.packet_embedding.parameters()) + list(self.flow_embedding.parameters()) + list(self.packet_encoder.parameters()) + list(self.flow_encoder.parameters()), lr=self.config.learning_rate)
         criterion = nn.CrossEntropyLoss()
@@ -142,7 +136,7 @@ class PacketLevelTrainer:
             #         self.all_packet_encodings = []
             #     self.previous_packet_number = current_packet_number
 
-            # handle last file after loop
+        # handle last file after loop
         if self.all_packet_encodings and self.previous_packet_number:
             print(
                 f"Final processing for last flow packet {self.previous_packet_number} in file {self.previous_packet_file}")
@@ -151,5 +145,34 @@ class PacketLevelTrainer:
             mpm_loss.backward()
             self.optimizer.step()
 
+class ExperimentRunner:
+    def __init__(self):
+        self.config = Config()
+        data_module = DataModule()
+        self.tokenizer = data_module.get_tokenizer()
 
+
+
+    def load_vocab(self):
+        vocab = {}
+        with open(self.config.tokenizer_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                token, token_id = line.strip().split('\t')
+                vocab[token] = int(token_id)
+        return vocab
+
+    def run(self):
+        vocab = self.load_vocab()
+        tokenizer = self.tokenizer
+
+
+        packet_embedding = PacketEmbedding(self.config.vocab_size, max_len=self.config.max_len, embed_dim=self.config.embed_dim, dropout=self.config.dropout).to(self.device)
+        packet_encoder = PacketLevelEncoder(self.config.vocab_size, self.config.embed_dim, self.config.max_len, self.config.num_heads, self.config.num_layers, self.config.dropout).to(self.device)
+        flow_embedding = FlowEmbedding(self.config.embed_dim, self.config.max_flow_length, self.config.dropout, vocab).to(self.device)
+        flow_encoder = FlowLevelEncoder(self.config.embed_dim, self.config.num_layers, self.config.num_heads, self.config.dropout, self.config.max_flow_length, self.config.mask_prob).to(self.device)
+
+        trainer = PacketLevelTrainer(packet_embedding, packet_encoder, flow_embedding, flow_encoder)
+
+        for epoch in range(self.config.num_epochs):
+            trainer.train_epoch(epoch)
 
