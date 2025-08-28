@@ -4,8 +4,5 @@ __pycache__/
 
 .venv/
 *.egg-info/.idea
-uv.lock
-pyproject.toml
-.python-version
 .idea
 manifest/

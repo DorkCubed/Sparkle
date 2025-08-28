@@ -17,9 +17,12 @@ class HierarchicalBERTTrainer:
 
 class PacketLevelTrainer:
     def __init__(self):
+        data_module = DataModule()
         self.config = Config()
         self.vocab = self._init_vocab()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        self.train_loader = data_module.get_loader()
 
         self.packet_embedding = PacketEmbedding(self.config.vocab_size, max_len=self.config.max_len, embed_dim=self.config.embed_dim, dropout=self.config.dropout).to(self.device)
         self.packet_encoder = PacketLevelEncoder(self.config.vocab_size, self.config.embed_dim, self.config.max_len, self.config.num_heads, self.config.num_layers, self.config.dropout).to(self.device)
@@ -30,6 +33,18 @@ class PacketLevelTrainer:
         self.optimizer = optim.Adam(list(self.packet_embedding.parameters()) + list(self.flow_embedding.parameters()) + list(self.packet_encoder.parameters()) + list(self.flow_encoder.parameters()), lr=self.config.learning_rate)
         criterion = nn.CrossEntropyLoss()
 
+        self.accumulation_steps = 5
+        self.accumulated_mlm_loss = 0.0
+        self.accumulated_sfbo_loss = 0.0
+        self.batch_counter = 0
+
+        # bookkeeping logic
+        self.previous_packet_file = None
+        self.all_packet_encodings = []
+        self.previous_packet_number = None
+        self.total_packet_enc_loss = 0
+
+
     def _init_vocab(self):
         vocab = {}
         with open(self.config.tokenizer_path, 'r', encoding='utf-8') as f:
@@ -39,6 +54,7 @@ class PacketLevelTrainer:
 
         return vocab
 
+    # TODO: fix this to be compatible with manifest.json
     def process_encodings(self, encodings, direction_file_path):
         final_packet_encodings = torch.cat(encodings, dim=0).to(self.device)
         print("Final concatenated shape:", final_packet_encodings.shape)
@@ -65,4 +81,75 @@ class PacketLevelTrainer:
         mpm_loss_tensor = mpm_loss[0].to(self.device)
         print(mpm_loss_tensor)
         return mpm_loss_tensor
+
+    def backward_and_optimize(self, accumulated_mlm_loss, accumulated_sfbo_loss):
+        """Perform backpropagation and optimization on accumulated losses."""
+        total_accumulated_loss = accumulated_mlm_loss + accumulated_sfbo_loss
+        self.optimizer.zero_grad()
+        total_accumulated_loss.backward()
+        self.optimizer.step()
+        self.accumulated_mlm_loss = 0.0
+        self.accumulated_sfbo_loss = 0.0
+        self.batch_counter = 0
+
+    def train_epoch(self, epoch):
+        print(f"Training epoch {epoch}")
+
+        for i, (packet_sequences, field_position, header_position, file_name) in enumerate(self.loader):
+            packet_sequences = packet_sequences.squeeze(0).to(self.device)
+            field_position = field_position.squeeze(0).to(self.device)
+            header_position = header_position.squeeze(0).to(self.device)
+
+            current_file_name = file_name[0]
+
+            # finalize previous file, then switch to new file
+            if self.previous_packet_file is not None and current_file_name != self.previous_packet_file:
+                if self.all_packet_encodings:
+                    print(f"Completed file: {self.previous_packet_file}")
+                    mpm_loss = self.process_encodings(self.all_packet_encodings, self.previous_packet_number)
+                    self.optimizer.zero_grad()
+                    mpm_loss.backward()
+                    self.optimizer.step()
+                # reset
+                self.all_packet_encodings, self.total_packet_enc_loss = [], 0
+                self.previous_packet_number = None
+                print(f"Started new file: {current_file_name}")
+
+            self.previous_packet_file = current_file_name
+
+            # forward pass (packet level)
+            mlm_loss, sfbo_loss, encoded_packets_mean = self.packet_encoder(
+                packet_sequences, field_pos=field_position, header_pos=header_position
+            )
+
+            # accumulate
+            self.accumulated_mlm_loss += mlm_loss
+            self.accumulated_sfbo_loss += sfbo_loss
+            self.batch_counter += 1
+
+            if self.batch_counter == self.accumulation_steps:
+                self.backward_and_optimize()
+
+            self.all_packet_encodings.append(encoded_packets_mean.detach())
+
+            # TODO: fix this to comply with manifest.json logic
+            # detect packet number
+            # match = re.search(r'packet_(\d+)\.txt', current_file_name)
+            # if match:
+            #     current_packet_number = match.group(1)
+            #     if self.previous_packet_number and current_packet_number != self.previous_packet_number:
+            #         print(f"Flow completed for packet {self.previous_packet_number}")
+            #         self.all_packet_encodings = []
+            #     self.previous_packet_number = current_packet_number
+
+            # handle last file after loop
+        if self.all_packet_encodings and self.previous_packet_number:
+            print(
+                f"Final processing for last flow packet {self.previous_packet_number} in file {self.previous_packet_file}")
+            mpm_loss = self.process_encodings(self.all_packet_encodings, self.previous_packet_number)
+            self.optimizer.zero_grad()
+            mpm_loss.backward()
+            self.optimizer.step()
+
+
 
