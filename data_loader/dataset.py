@@ -3,6 +3,7 @@ import json
 from torch.utils.data import Dataset
 from .encoder.positional_encodings import field_pos, header_pos
 from configs.config import Config
+from .data_loader import DataModule
 from scripts.s3_utils import S3DataFetcher
 
 class PacketSequenceDataset(Dataset):
