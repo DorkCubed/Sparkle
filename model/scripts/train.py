@@ -48,7 +48,7 @@ class PacketLevelTrainer:
 
         return vocab
 
-    # TODO: fix this to be compatible with manifest.json
+    # TODO: fix this to be compatible with manifest.json logic
     def process_encodings(self, encodings, direction_file_path):
         final_packet_encodings = torch.cat(encodings, dim=0).to(self.device)
         print("Final concatenated shape:", final_packet_encodings.shape)
@@ -77,7 +77,6 @@ class PacketLevelTrainer:
         return mpm_loss_tensor
 
     def backward_and_optimize(self, accumulated_mlm_loss, accumulated_sfbo_loss):
-        """Perform backpropagation and optimization on accumulated losses."""
         total_accumulated_loss = accumulated_mlm_loss + accumulated_sfbo_loss
         self.optimizer.zero_grad()
         total_accumulated_loss.backward()
@@ -89,7 +88,7 @@ class PacketLevelTrainer:
     def train_epoch(self, epoch):
         print(f"Training epoch {epoch}")
 
-        for i, (packet_sequences, field_position, header_position, file_name) in enumerate(self.loader):
+        for i, (packet_sequences, field_position, header_position, file_name) in enumerate(self.train_loader):
             packet_sequences = packet_sequences.squeeze(0).to(self.device)
             field_position = field_position.squeeze(0).to(self.device)
             header_position = header_position.squeeze(0).to(self.device)
@@ -151,8 +150,6 @@ class ExperimentRunner:
         data_module = DataModule()
         self.tokenizer = data_module.get_tokenizer()
 
-
-
     def load_vocab(self):
         vocab = {}
         with open(self.config.tokenizer_path, 'r', encoding='utf-8') as f:
@@ -176,3 +173,6 @@ class ExperimentRunner:
         for epoch in range(self.config.num_epochs):
             trainer.train_epoch(epoch)
 
+if __name__ == "__main__":
+    runner = ExperimentRunner()
+    runner.run()
