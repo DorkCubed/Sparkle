@@ -7,6 +7,7 @@ from model.packet_encoder import PacketLevelEncoder
 from data_loader.data_loader import DataModule
 from torch.cuda.amp import GradScaler
 from configs.config import Config
+import os
 from model.scripts.test import flow_embedding
 
 class PacketLevelTrainer:
@@ -35,9 +36,8 @@ class PacketLevelTrainer:
         # bookkeeping logic
         self.previous_packet_file = None
         self.all_packet_encodings = []
-        self.previous_packet_number = None
+        self.previous_packet_id = None
         self.total_packet_enc_loss = 0
-
 
     def _init_vocab(self):
         vocab = {}
@@ -49,11 +49,12 @@ class PacketLevelTrainer:
         return vocab
 
     # TODO: fix this to be compatible with manifest.json logic
-    def process_encodings(self, encodings, direction_file_path):
+    def process_encodings(self, encodings, entry):
         final_packet_encodings = torch.cat(encodings, dim=0).to(self.device)
         print("Final concatenated shape:", final_packet_encodings.shape)
 
-        with open(direction_file_path, 'r') as file:
+        direction_file_path = entry["direction"]
+        with open(direction_file_path, 'r', encoding="utf-8") as file:
             direction_data = [int(line.strip()) for line in file.readlines()]
 
         # Convert direction data to a tensor
@@ -88,27 +89,28 @@ class PacketLevelTrainer:
     def train_epoch(self, epoch):
         print(f"Training epoch {epoch}")
 
-        for i, (packet_sequences, field_position, header_position, file_name) in enumerate(self.train_loader):
+        for i, (packet_sequences, field_position, header_position, entry) in enumerate(self.train_loader):
             packet_sequences = packet_sequences.squeeze(0).to(self.device)
             field_position = field_position.squeeze(0).to(self.device)
             header_position = header_position.squeeze(0).to(self.device)
 
-            current_file_name = file_name[0]
+            current_packet_file = entry["packet"]
+            current_packet_id = os.path.basename(current_packet_file).replace(".txt", "")
 
             # finalize previous file, then switch to new file
-            if self.previous_packet_file is not None and current_file_name != self.previous_packet_file:
+            if self.previous_packet_file is not None and current_packet_file != self.previous_packet_file:
                 if self.all_packet_encodings:
                     print(f"Completed file: {self.previous_packet_file}")
-                    mpm_loss = self.process_encodings(self.all_packet_encodings, self.previous_packet_number)
+                    mpm_loss = self.process_encodings(self.all_packet_encodings, self.previous_packet_id)
                     self.optimizer.zero_grad()
                     mpm_loss.backward()
                     self.optimizer.step()
                 # reset
                 self.all_packet_encodings, self.total_packet_enc_loss = [], 0
-                self.previous_packet_number = None
-                print(f"Started new file: {current_file_name}")
+                self.previous_packet_id = None
+                print(f"Started new file: {current_packet_file}")
 
-            self.previous_packet_file = current_file_name
+            self.previous_packet_file = current_packet_file
 
             # forward pass (packet level)
             mlm_loss, sfbo_loss, encoded_packets_mean = self.packet_encoder(
@@ -125,21 +127,19 @@ class PacketLevelTrainer:
 
             self.all_packet_encodings.append(encoded_packets_mean.detach())
 
-            # TODO: fix this to comply with manifest.json logic
+            # TODO: test this, does it work with manifest.json
             # detect packet number
-            # match = re.search(r'packet_(\d+)\.txt', current_file_name)
-            # if match:
-            #     current_packet_number = match.group(1)
-            #     if self.previous_packet_number and current_packet_number != self.previous_packet_number:
-            #         print(f"Flow completed for packet {self.previous_packet_number}")
-            #         self.all_packet_encodings = []
-            #     self.previous_packet_number = current_packet_number
+            if self.previous_packet_id and current_packet_id != self.previous_packet_id:
+                print(f"Flow completed for packet {self.previous_packet_id}")
+                self.all_packet_encodings = []
+
+            self.previous_packet_id = current_packet_id
 
         # handle last file after loop
-        if self.all_packet_encodings and self.previous_packet_number:
+        if self.all_packet_encodings and self.previous_packet_id:
             print(
-                f"Final processing for last flow packet {self.previous_packet_number} in file {self.previous_packet_file}")
-            mpm_loss = self.process_encodings(self.all_packet_encodings, self.previous_packet_number)
+                f"Final processing for last flow packet {self.previous_packet_id} in file {self.previous_packet_file}")
+            mpm_loss = self.process_encodings(self.all_packet_encodings, self.previous_packet_id)
             self.optimizer.zero_grad()
             mpm_loss.backward()
             self.optimizer.step()

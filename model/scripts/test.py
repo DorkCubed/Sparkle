@@ -294,7 +294,7 @@ for epoch in range(1):
 #     print("Run", epoch)
 #     previous_packet_file = None
 #     all_packet_encodings = []
-#     previous_packet_number = None
+#     previous_packet_id = None
 #     total_packet_enc_loss = 0
 
 #     for i, (packet_sequences, field_position, header_position, file_name) in enumerate(train_loader):
@@ -310,7 +310,7 @@ for epoch in range(1):
 #             if all_packet_encodings:
 #                 print(f"Completed processing file: {previous_packet_file}")
                 
-#                 mpm_loss = process_encodings(all_packet_encodings, previous_packet_number)
+#                 mpm_loss = process_encodings(all_packet_encodings, previous_packet_id)
 #                 total_length = len(all_packet_encodings)
 #                 avg_packet_enc_loss = total_packet_enc_loss / total_length
 #                 total_loss = mpm_loss + avg_packet_enc_loss
@@ -324,7 +324,7 @@ for epoch in range(1):
 
 #             all_packet_encodings = []
 #             total_packet_enc_loss = 0
-#             previous_packet_number = None
+#             previous_packet_id = None
 #             print(f"Started processing new file: {current_file_name}")
 
 #         previous_packet_file = current_file_name
@@ -349,21 +349,21 @@ for epoch in range(1):
 #         if match:
 #             current_packet_number = match.group(1)
 
-#             if previous_packet_number is not None and current_packet_number != previous_packet_number:
-#                 print(f"Flow completed for packet: {previous_packet_number}")
+#             if previous_packet_id is not None and current_packet_number != previous_packet_id:
+#                 print(f"Flow completed for packet: {previous_packet_id}")
 #                 all_packet_encodings = []
 
-#             previous_packet_number = current_packet_number
+#             previous_packet_id = current_packet_number
 #         else:
 #             print("No packet number found in file name:", current_file_name)
 
 #         torch.cuda.empty_cache()
 
 #     # Final processing for the last file
-#     if all_packet_encodings and previous_packet_number is not None:
-#         print(f"Final processing for last flow packet: {previous_packet_number} in file: {previous_packet_file}")
+#     if all_packet_encodings and previous_packet_id is not None:
+#         print(f"Final processing for last flow packet: {previous_packet_id} in file: {previous_packet_file}")
         
-#         mpm_loss = process_encodings(all_packet_encodings, previous_packet_number)
+#         mpm_loss = process_encodings(all_packet_encodings, previous_packet_id)
 #         total_length = len(all_packet_encodings)
 #         avg_packet_enc_loss = total_packet_enc_loss / total_length
 #         total_loss = mpm_loss + avg_packet_enc_loss
@@ -374,7 +374,7 @@ for epoch in range(1):
 #     print("Run", epoch)
 #     previous_packet_file = None
 #     all_packet_encodings = []
-#     previous_packet_number = None
+#     previous_packet_id = None
 #     total_packet_enc_loss = 0
 
 #     # Ensure train_loader is sorted by file
@@ -390,7 +390,7 @@ for epoch in range(1):
 #         if previous_packet_file is not None and current_file_name != previous_packet_file:
 #             if all_packet_encodings:
 #                 print(f"Completed processing file: {previous_packet_file}")
-#                 mpm_loss = process_encodings(all_packet_encodings, previous_packet_number)
+#                 mpm_loss = process_encodings(all_packet_encodings, previous_packet_id)
 #                 total_length = len(all_packet_encodings)
 #                 avg_packet_enc_loss = total_packet_enc_loss/total_length
 #                 print("LOSS: ", mpm_loss + avg_packet_enc_loss)
@@ -401,7 +401,7 @@ for epoch in range(1):
 #             # Reset for the new file
 #             all_packet_encodings = []
 #             total_packet_enc_loss = 0
-#             previous_packet_number = None
+#             previous_packet_id = None
 #             print(f"Started processing new file: {current_file_name}")
 
 #         # Update previous_packet_file to the current file name
@@ -434,20 +434,20 @@ for epoch in range(1):
 #             current_packet_number = match.group(1)
 
 #             # Handle packet number change
-#             if previous_packet_number is not None and current_packet_number != previous_packet_number:
-#                 print(f"Flow completed for packet: {previous_packet_number}")
+#             if previous_packet_id is not None and current_packet_number != previous_packet_id:
+#                 print(f"Flow completed for packet: {previous_packet_id}")
 #                 all_packet_encodings = []  # Reset encodings for each packet flow
 
-#             previous_packet_number = current_packet_number
+#             previous_packet_id = current_packet_number
 #         else:
 #             print("No packet number found in file name:", current_file_name)
                 
 #         torch.cuda.empty_cache()
 
 #     # After all batches, handle remaining encodings for the last file
-#     if all_packet_encodings and previous_packet_number is not None:
-#         print(f"Final processing for last flow packet: {previous_packet_number} in file: {previous_packet_file}")
-#         mpm_loss = process_encodings(all_packet_encodings, previous_packet_number)
+#     if all_packet_encodings and previous_packet_id is not None:
+#         print(f"Final processing for last flow packet: {previous_packet_id} in file: {previous_packet_file}")
+#         mpm_loss = process_encodings(all_packet_encodings, previous_packet_id)
 #         total_length = len(all_packet_encodings)
 #         avg_packet_enc_loss = total_packet_enc_loss/total_length
 #         total_packet_enc_loss = 0
@@ -459,7 +459,7 @@ for epoch in range(1):
 #     print("Run", epoch)
 #     previous_packet_file = None
 #     all_packet_encodings = []
-#     previous_packet_number = None
+#     previous_packet_id = None
 
 #     for i, (packet_sequences, field_position, header_position, file_name) in enumerate(train_loader):
 #         # Move data to the device in the training loop
@@ -487,7 +487,7 @@ for epoch in range(1):
 #         if previous_packet_file is None or current_file_name != previous_packet_file:
 #             if previous_packet_file is not None and all_packet_encodings:
 #                 print(f"Completed processing file: {previous_packet_file}")
-#                 mpm_loss = process_encodings(all_packet_encodings, previous_packet_number)
+#                 mpm_loss = process_encodings(all_packet_encodings, previous_packet_id)
 #                 print("1")
 #                 backward(mpm_loss + mlm_loss + sfbo_loss)
 
@@ -501,17 +501,17 @@ for epoch in range(1):
 #             all_packet_encodings.append(encoded_packets_mean)
 
 #             # Handle packet number change
-#             if previous_packet_number is not None and current_packet_number != previous_packet_number:
-#                 print(f"Flow completed for packet: {previous_packet_number}")
+#             if previous_packet_id is not None and current_packet_number != previous_packet_id:
+#                 print(f"Flow completed for packet: {previous_packet_id}")
 #                 all_packet_encodings = []
 
-#             previous_packet_number = current_packet_number
+#             previous_packet_id = current_packet_number
 #         else:
 #             print("No packet number found in file name:", current_file_name)
 
 #     # Handle remaining encodings
-#     if all_packet_encodings and previous_packet_number is not None:
-#         print("Final processing for last flow packet:", previous_packet_number)
-#         mpm_loss = process_encodings(all_packet_encodings, previous_packet_number)
+#     if all_packet_encodings and previous_packet_id is not None:
+#         print("Final processing for last flow packet:", previous_packet_id)
+#         mpm_loss = process_encodings(all_packet_encodings, previous_packet_id)
 #         backward(mpm_loss + mlm_loss + sfbo_loss)
 

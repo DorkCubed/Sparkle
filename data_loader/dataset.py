@@ -1,9 +1,13 @@
-from s3fs import S3FileSystem
 import json
-from torch.utils.data import Dataset
-from .encoder.positional_encodings import field_pos, header_pos
-from configs.config import Config
 from pathlib import Path
+
+from s3fs import S3FileSystem
+from sympy.testing.quality_unicode import encoding_header_re
+from torch.utils.data import Dataset
+
+from configs.config import Config
+from .encoder.positional_encodings import field_pos, header_pos
+
 
 class PacketSequenceDataset(Dataset):
     def __init__(self, config: Config, manifest_path, tokenizer, chunk_size):
@@ -28,7 +32,14 @@ class PacketSequenceDataset(Dataset):
         with open(self.manifest_path, 'r') as f:
             data = json.load(f)
 
-        files = [(m["packet"], m["header"], m["field"], m["direction"]) for m in data]
+        files = [{
+            "packet": m["packet"],
+            "header": m["header"],
+            "field": m["field"],
+            "direction": m["direction"]
+        }
+            for m in data
+        ]
         return files
 
     def _read_s3_file(self, s3_path):
@@ -52,7 +63,13 @@ class PacketSequenceDataset(Dataset):
         else:
             raise IndexError("Index out of range")
 
-        packet_path, header_path, field_path, _ = self.files[file_idx]
+        entry = self.files[file_idx]
+        packet_path, header_path, field_path, direction_path = (
+            entry["packet"],
+            entry["header"],
+            entry["field"],
+            entry["direction"]
+        )
 
         hex_dumps = self._read_file(packet_path).splitlines()
         padded_all_tokens, token_ids, mask, max_length = self.tokenizer.encode_packet(hex_dumps)
@@ -65,4 +82,4 @@ class PacketSequenceDataset(Dataset):
         field_position = field_pos(field_path, chunk_start, chunk_end)
         header_position = header_pos(header_path, chunk_start, chunk_end)
 
-        return chunk, field_position, header_position, packet_path
+        return chunk, field_position, header_position, entry
