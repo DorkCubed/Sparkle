@@ -16,8 +16,9 @@ class Config:
         self.fetcher = None
         self.files = None
 
-        self.tokenizer_path = os.path.join(current_dir, "tokenizer", "vocab.txt")
-        self.manifest_path = os.path.join(parent_dir, "dataset", "manifest", "manifest.json")
+        self.tokenizer_path = os.path.join(parent_dir, "data_loader", "tokenizer", "vocab.txt")
+        # self.manifest_path = os.path.join(parent_dir, "manifest", "manifest.json")
+        self.manifest_path = os.path.join(parent_dir, "manifest", "test_manifest.json")
         self.batch_size = 1
         self.shuffle = False
 

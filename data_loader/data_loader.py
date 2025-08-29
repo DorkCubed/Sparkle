@@ -3,7 +3,6 @@ from torch.utils.data import DataLoader
 from .dataset import PacketSequenceDataset
 from configs.config import Config
 from .tokenizer.tokenizer import Tokenizer
-from scripts.s3_utils import S3DataFetcher
 
 class DataModule:
     def __init__(self):
@@ -26,6 +25,7 @@ class DataModule:
     def _init_dataloader(self):
         return DataLoader(self.dataset, batch_size=self.config.batch_size, shuffle=True)
 
+    # TODO: definitely not pythonic, update later
     def get_loader(self):
         return self.train_loader
 
@@ -62,4 +62,4 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     data_module = DataModule()
     train_loader = data_module.get_loader()
-    test_data_loader(train_loader, 3)
+    test_data_loader(train_loader, num_batches=2)
