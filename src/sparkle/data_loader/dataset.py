@@ -2,11 +2,10 @@ import json
 from pathlib import Path
 
 from s3fs import S3FileSystem
-from sympy.testing.quality_unicode import encoding_header_re
 from torch.utils.data import Dataset
 
-from configs.config import Config
-from .encoder.positional_encodings import field_pos, header_pos
+from sparkle.configs.config import Config
+from sparkle.data_loader.encoder.positional_encodings import field_pos, header_pos
 
 
 class PacketSequenceDataset(Dataset):
@@ -21,8 +20,8 @@ class PacketSequenceDataset(Dataset):
         self.chunk_size = chunk_size
         self.total_chunks = []
 
-        for packet_path, _, _, _ in self.files:
-            num_lines = len(self._read_file(packet_path).splitlines())
+        for file in self.files:
+            num_lines = len(self._read_file(file["packet"]).splitlines())
             num_chunks = (num_lines + self.chunk_size - 1) // self.chunk_size
             self.total_chunks.append(num_chunks)
 

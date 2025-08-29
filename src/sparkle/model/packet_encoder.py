@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import random
-from embedding import PacketEmbedding
+from sparkle.model.embedding import PacketEmbedding
 
 class PacketLevelEncoder(nn.Module):
     def __init__(self, vocab_size, embed_dim, max_len, num_heads, num_layers, dropout):

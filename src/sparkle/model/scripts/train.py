@@ -1,14 +1,11 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from model.embedding import PacketEmbedding, FlowEmbedding
-from model.flow_encoder import FlowLevelEncoder
-from model.packet_encoder import PacketLevelEncoder
-from data_loader.data_loader import DataModule
-from torch.cuda.amp import GradScaler
-from configs.config import Config
-import os
-from model.scripts.test import flow_embedding
+from sparkle.model.embedding import PacketEmbedding, FlowEmbedding
+from sparkle.model.flow_encoder import FlowLevelEncoder
+from sparkle.model.packet_encoder import PacketLevelEncoder
+from sparkle.data_loader.data_loader import DataModule
+from sparkle.configs.config import Config
 
 class PacketLevelTrainer:
     def __init__(self, packet_embedding, packet_encoder, flow_embedding, flow_encoder):
@@ -63,7 +60,7 @@ class PacketLevelTrainer:
         direction_tensor = torch.tensor(direction_data, device=self.device)
         print(final_packet_encodings.device, direction_tensor.device)
         # Call FlowEmbedding with the accumulated packet encodings and direction data
-        flow_embeddings, pad_indices = flow_embedding(final_packet_encodings, direction_tensor)
+        flow_embeddings, pad_indices = FlowEmbedding(final_packet_encodings, direction_tensor)
         print("Flow embeddings computed for packet:", {direction_file_path})
         print("flow embeddings: ", flow_embeddings.shape)
         print("-------------------------------------------------------------")

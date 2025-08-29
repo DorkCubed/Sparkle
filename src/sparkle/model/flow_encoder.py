@@ -1,9 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-# from hierarchial_transformer import BERT
-import random
-from embedding import FlowEmbedding
 
 
 class FlowLevelEncoder(nn.Module):

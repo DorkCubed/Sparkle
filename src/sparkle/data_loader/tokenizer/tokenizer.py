@@ -1,5 +1,5 @@
 import torch
-from configs.config import Config
+from sparkle.configs.config import Config
 import os
 
 class Tokenizer:
