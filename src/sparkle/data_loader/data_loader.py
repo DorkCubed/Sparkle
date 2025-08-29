@@ -1,8 +1,8 @@
 import torch
 from torch.utils.data import DataLoader
 from .dataset import PacketSequenceDataset
-from configs.config import Config
-from .tokenizer.tokenizer import Tokenizer
+from sparkle.configs.config import Config
+from sparkle.data_loader.tokenizer.tokenizer import Tokenizer
 
 class DataModule:
     def __init__(self):

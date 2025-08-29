@@ -1,14 +1,13 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from model.Input_Tokenizer import Tokenizer
-from model.embedding import PacketEmbedding, FlowEmbedding
-from model.packet_encoder import PacketLevelEncoder
-from model.flow_encoder import FlowLevelEncoder
+from src.sparkle.model.Input_Tokenizer import Tokenizer
+from src.sparkle.model.embedding import PacketEmbedding, FlowEmbedding
+from src.sparkle.model.packet_encoder import PacketLevelEncoder
+from src.sparkle.model.flow_encoder import FlowLevelEncoder
 import os
 import re
-import numpy as np
-from data_loader.encoder.positional_encodings import field_pos, header_pos
+from src.sparkle.data_loader.encoder.positional_encodings import field_pos, header_pos
 
 # Hyperparameters
 vocab_size = 262
@@ -122,7 +121,7 @@ train_loader = DataLoader(dataset, batch_size=1, shuffle=False)
 #     print("Header Position:", header_position.shape)
 #     print("File Name:", file_name)
 
-from torch.cuda.amp import autocast, GradScaler
+from torch.cuda.amp import GradScaler
 scaler = GradScaler('cuda')
 
 direction_dir = "/home/satvik/spark/spark2/direction"

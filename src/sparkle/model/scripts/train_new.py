@@ -3,11 +3,10 @@ import os
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from model import BERTModel
+from src.sparkle.model import BERTModel
 from Input_Tokenizer import Tokenizer
 from dataset import PacketSequenceDataset
 import sagemaker_containers
-import socket
 
 
 def train(args):
