@@ -1,11 +1,27 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import logging
+import os
+from datetime import datetime
 from sparkle.model.embedding import PacketEmbedding, FlowEmbedding
 from sparkle.model.flow_encoder import FlowLevelEncoder
 from sparkle.model.packet_encoder import PacketLevelEncoder
 from sparkle.data_loader.data_loader import DataModule
 from sparkle.configs.config import Config
+
+# Configure logging
+os.makedirs('logs', exist_ok=True)
+log_file = f'logs/training_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(log_file),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 class PacketLevelTrainer:
     def __init__(self, packet_embedding, packet_encoder, flow_embedding, flow_encoder):
@@ -50,7 +66,7 @@ class PacketLevelTrainer:
     # TODO (test)
     def process_encodings(self, encodings, entry):
         final_packet_encodings = torch.cat(encodings, dim=0).to(self.device)
-        print("Final concatenated shape:", final_packet_encodings.shape)
+        logger.info(f"Final concatenated shape: {final_packet_encodings.shape}")
 
         direction_file_path = entry["direction"]
         with open(direction_file_path, 'r', encoding="utf-8") as file:
@@ -58,22 +74,22 @@ class PacketLevelTrainer:
 
         # Convert direction data to a tensor
         direction_tensor = torch.tensor(direction_data, device=self.device)
-        print(final_packet_encodings.device, direction_tensor.device)
+        logger.debug(f"Device - Final packet encodings: {final_packet_encodings.device}, Direction tensor: {direction_tensor.device}")
         # Call FlowEmbedding with the accumulated packet encodings and direction data
         flow_embeddings, pad_indices = FlowEmbedding(final_packet_encodings, direction_tensor)
-        print("Flow embeddings computed for packet:", {direction_file_path})
-        print("flow embeddings: ", flow_embeddings.shape)
-        print("-------------------------------------------------------------")
+        logger.info(f"Flow embeddings computed for packet: {direction_file_path}")
+        logger.debug(f"Flow embeddings shape: {flow_embeddings.shape}")
+        logger.debug("-" * 60)
 
         # Compute flow encoding and MPM loss
         flow_encoding, mpm_loss = self.flow_encoder(flow_embeddings, pad_indices)
-        print("flow encoding: ", flow_encoding.shape)
-        print("mpm loss: ", mpm_loss)
-        print(type(mpm_loss))
+        logger.debug(f"Flow encoding shape: {flow_encoding.shape}")
+        logger.info(f"MPM loss: {mpm_loss}")
+        logger.debug(f"MPM loss type: {type(mpm_loss)}")
 
         # Ensure mpm_loss is a tensor and on the same device
         mpm_loss_tensor = mpm_loss[0].to(self.device)
-        print(mpm_loss_tensor)
+        logger.debug(f"MPM loss tensor: {mpm_loss_tensor}")
         return mpm_loss_tensor
 
     def backward_and_optimize(self, accumulated_mlm_loss, accumulated_sfbo_loss):
@@ -87,7 +103,9 @@ class PacketLevelTrainer:
 
     # TODO: test this, especially loss logic
     def train_epoch(self, epoch):
-        print(f"Training epoch {epoch}")
+        logger.info(f"\n{'='*30}")
+        logger.info(f"Starting training epoch {epoch + 1}")
+        logger.info(f"{'='*30}")
 
         for i, (packet_sequences, field_position, header_position, entry) in enumerate(self.train_loader):
             packet_sequences = packet_sequences.squeeze(0).to(self.device)
@@ -99,7 +117,7 @@ class PacketLevelTrainer:
             # finalize previous file, then switch to new file
             if self.previous_entry is not None and current_packet_file != self.previous_packet_file:
                 if self.all_packet_encodings:
-                    print(f"Completed file: {self.previous_entry["packet"]}")
+                    logger.info(f"Completed processing file: {self.previous_entry['packet']}")
                     mpm_loss = self.process_encodings(self.all_packet_encodings, self.previous_entry["direction"])
                     self.optimizer.zero_grad()
                     mpm_loss.backward()
@@ -107,7 +125,7 @@ class PacketLevelTrainer:
                 # reset
                 self.all_packet_encodings, self.total_packet_enc_loss = [], 0
                 self.previous_packet_id = None
-                print(f"Started new file: {current_packet_file}")
+                logger.info(f"Starting new file: {current_packet_file}")
 
             self.previous_packet_file = current_packet_file
 
@@ -129,14 +147,16 @@ class PacketLevelTrainer:
             # TODO: test this, does it work with manifest.json?
             # detect packet number
             if self.previous_entry and self.previous_entry["packet"] != current_packet_file:
-                print(f"Flow completed for packet {self.previous_packet_id}")
+                logger.info(f"Flow completed for packet {self.previous_packet_id}")
                 self.all_packet_encodings = []
 
             self.previous_entry = entry
         # handle last file after loop
         if self.all_packet_encodings and self.previous_entry["packet"]:
-            print(
-                f"Final processing for last flow packet {self.previous_packet_id} in file {self.previous_packet_file}")
+            logger.info(
+                f"Final processing for last flow packet {self.previous_packet_id} "
+                f"in file {self.previous_packet_file}"
+            )
             mpm_loss = self.process_encodings(self.all_packet_encodings, self.previous_entry)
             self.optimizer.zero_grad()
             mpm_loss.backward()
@@ -144,10 +164,15 @@ class PacketLevelTrainer:
 
 class ExperimentRunner:
     def __init__(self):
+        logger.info("Initializing ExperimentRunner...")
         self.config = Config()
         data_module = DataModule()
         self.tokenizer = data_module.get_tokenizer()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        logger.info(f"Using device: {self.device}")
+        if torch.cuda.is_available():
+            logger.info(f"CUDA device name: {torch.cuda.get_device_name(0)}")
+            logger.info(f"CUDA device count: {torch.cuda.device_count()}")
 
     def load_vocab(self):
         vocab = {}
@@ -158,8 +183,9 @@ class ExperimentRunner:
         return vocab
 
     def run(self):
+        logger.info("Starting model training...")
         vocab = self.load_vocab()
-        tokenizer = self.tokenizer
+        logger.info(f"Vocabulary size: {len(vocab)}")
 
 
         packet_embedding = PacketEmbedding(self.config.vocab_size, max_len=self.config.max_len, embed_dim=self.config.embed_dim, dropout=self.config.dropout).to(self.device)
