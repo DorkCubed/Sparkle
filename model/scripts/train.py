@@ -37,6 +37,7 @@ class PacketLevelTrainer:
         self.previous_packet_file = None
         self.all_packet_encodings = []
         self.previous_packet_id = None
+        self.previous_entry = None
         self.total_packet_enc_loss = 0
 
     def _init_vocab(self):
@@ -48,7 +49,8 @@ class PacketLevelTrainer:
 
         return vocab
 
-    # TODO: fix this to be compatible with manifest.json logic
+    # TODO (done): fix this to be compatible with manifest.json logic
+    # TODO (test)
     def process_encodings(self, encodings, entry):
         final_packet_encodings = torch.cat(encodings, dim=0).to(self.device)
         print("Final concatenated shape:", final_packet_encodings.shape)
@@ -86,6 +88,7 @@ class PacketLevelTrainer:
         self.accumulated_sfbo_loss = 0.0
         self.batch_counter = 0
 
+    # TODO: test this, especially loss logic
     def train_epoch(self, epoch):
         print(f"Training epoch {epoch}")
 
@@ -95,13 +98,12 @@ class PacketLevelTrainer:
             header_position = header_position.squeeze(0).to(self.device)
 
             current_packet_file = entry["packet"]
-            current_packet_id = os.path.basename(current_packet_file).replace(".txt", "")
 
             # finalize previous file, then switch to new file
-            if self.previous_packet_file is not None and current_packet_file != self.previous_packet_file:
+            if self.previous_entry is not None and current_packet_file != self.previous_packet_file:
                 if self.all_packet_encodings:
-                    print(f"Completed file: {self.previous_packet_file}")
-                    mpm_loss = self.process_encodings(self.all_packet_encodings, self.previous_packet_id)
+                    print(f"Completed file: {self.previous_entry["packet"]}")
+                    mpm_loss = self.process_encodings(self.all_packet_encodings, self.previous_entry["direction"])
                     self.optimizer.zero_grad()
                     mpm_loss.backward()
                     self.optimizer.step()
@@ -123,23 +125,22 @@ class PacketLevelTrainer:
             self.batch_counter += 1
 
             if self.batch_counter == self.accumulation_steps:
-                self.backward_and_optimize()
+                self.backward_and_optimize(self.accumulated_mlm_loss, self.accumulated_sfbo_loss)
 
             self.all_packet_encodings.append(encoded_packets_mean.detach())
 
-            # TODO: test this, does it work with manifest.json
+            # TODO: test this, does it work with manifest.json?
             # detect packet number
-            if self.previous_packet_id and current_packet_id != self.previous_packet_id:
+            if self.previous_entry and self.previous_entry["packet"] != current_packet_file:
                 print(f"Flow completed for packet {self.previous_packet_id}")
                 self.all_packet_encodings = []
 
-            self.previous_packet_id = current_packet_id
-
+            self.previous_entry = entry
         # handle last file after loop
-        if self.all_packet_encodings and self.previous_packet_id:
+        if self.all_packet_encodings and self.previous_entry["packet"]:
             print(
                 f"Final processing for last flow packet {self.previous_packet_id} in file {self.previous_packet_file}")
-            mpm_loss = self.process_encodings(self.all_packet_encodings, self.previous_packet_id)
+            mpm_loss = self.process_encodings(self.all_packet_encodings, self.previous_entry)
             self.optimizer.zero_grad()
             mpm_loss.backward()
             self.optimizer.step()
@@ -149,6 +150,7 @@ class ExperimentRunner:
         self.config = Config()
         data_module = DataModule()
         self.tokenizer = data_module.get_tokenizer()
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     def load_vocab(self):
         vocab = {}
