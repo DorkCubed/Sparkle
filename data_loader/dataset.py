@@ -3,8 +3,7 @@ import json
 from torch.utils.data import Dataset
 from .encoder.positional_encodings import field_pos, header_pos
 from configs.config import Config
-from .data_loader import DataModule
-from scripts.s3_utils import S3DataFetcher
+from pathlib import Path
 
 class PacketSequenceDataset(Dataset):
     def __init__(self, config: Config, manifest_path, tokenizer, chunk_size):
@@ -32,10 +31,13 @@ class PacketSequenceDataset(Dataset):
         files = [(m["packet"], m["header"], m["field"], m["direction"]) for m in data]
         return files
 
-    def _read_file(self, s3_path):
+    def _read_s3_file(self, s3_path):
         with self.fs.open(s3_path, "r") as f:
             return f.read()
 
+    def _read_file(self, path):
+        path = Path(path)
+        return path.read_text(encoding="utf-8")
 
     def __len__(self):
         return self.total_len
