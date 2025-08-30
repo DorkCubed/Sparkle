@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from tqdm import tqdm
 import logging
 import os
 from datetime import datetime
@@ -107,6 +108,13 @@ class PacketLevelTrainer:
         logger.info(f"Starting training epoch {epoch + 1}")
         logger.info(f"{'='*30}")
 
+        progress_bar = tqdm(
+            self.train_loader,
+            total=len(self.train_loader),
+            desc=f"Epoch {epoch + 1}",
+            leave=False
+        )
+
         for i, (packet_sequences, field_position, header_position, entry) in enumerate(self.train_loader):
             packet_sequences = packet_sequences.squeeze(0).to(self.device)
             field_position = field_position.squeeze(0).to(self.device)
@@ -138,6 +146,11 @@ class PacketLevelTrainer:
             self.accumulated_mlm_loss += mlm_loss
             self.accumulated_sfbo_loss += sfbo_loss
             self.batch_counter += 1
+
+            progress_bar.set_postfix({
+                "mlm_loss": f"{self.accumulated_mlm_loss:.4f}",
+                "sfbo_loss": f"{self.accumulated_sfbo_loss:.4f}"
+            })
 
             if self.batch_counter == self.accumulation_steps:
                 self.backward_and_optimize(self.accumulated_mlm_loss, self.accumulated_sfbo_loss)
