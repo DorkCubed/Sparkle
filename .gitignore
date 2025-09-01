@@ -5,10 +5,5 @@ __pycache__/
 .venv/
 *.egg-info/
 .idea
-<<<<<<< Updated upstream
 manifest/
 src/sparkle/logs/
-=======
-src/sparkle/logs/
-manifest/
->>>>>>> Stashed changes

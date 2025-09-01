@@ -42,6 +42,15 @@ class PacketEmbedding(nn.Module):
 
 class FlowEmbedding(nn.Module):
     def __init__(self, embed_dim, max_packets, dropout, vocab):
+        """
+        Initialises the Flow Embedding layer.
+
+        Args:
+            embed_dim (int): The dimensionality of the embeddings.
+            max_packets (int): The maximum number of packets in a flow.
+            dropout (float): The dropout rate for the embeddings.
+            vocab (dict): A dictionary mapping tokens to their IDs.
+        """
         super().__init__()
         self.packet_pos_embed = nn.Embedding(max_packets, embed_dim)
         self.direction_embed = nn.Embedding(3, embed_dim)
@@ -56,9 +65,9 @@ class FlowEmbedding(nn.Module):
         cls_packet_embeddings = cls_packet_embeddings[:, 0, :]  # Shape: [num_packets, embed_dim]
 
         # Define [CLSf], [SEP], and [PAD] token embeddings using vocab indices
-        clsf_token_index = torch.tensor(self.vocab['[CLSf]'], device=device)
-        sep_token_index = torch.tensor(self.vocab['[SEP]'], device=device)
-        pad_token_index = torch.tensor(self.vocab['[PAD]'], device=device)
+        clsf_token_index = torch.tensor(self.vocab["[CLSf]"], device=device)
+        sep_token_index = torch.tensor(self.vocab["[SEP]"], device=device)
+        pad_token_index = torch.tensor(self.vocab["[PAD]"], device=device)
 
         # Get the embeddings for special tokens
         clsf_token_embedding = self.token_embed(clsf_token_index).unsqueeze(0)  # Shape: [1, embed_dim]
