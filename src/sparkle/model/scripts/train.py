@@ -67,12 +67,11 @@ class PacketLevelTrainer:
     # TODO (done): fix this to be compatible with manifest.json logic
     # TODO (test)
     def process_encodings(self, encodings, entry):
-        logger.info(f"Starting process encoding for {entry["direction"]}")
+        logger.info(f"Starting process encoding for {entry}")
         final_packet_encodings = torch.cat(encodings, dim=0).to(self.device)
         logger.info(f"Final concatenated shape: {final_packet_encodings.shape}")
 
-        # TODO: use better syntax
-        direction_file_path = Path(entry["direction"][0])
+        direction_file_path = entry["direction"]
         with open(direction_file_path, 'r', encoding="utf-8") as file:
             direction_data = [int(line.strip()) for line in file.readlines()]
 
@@ -118,7 +117,8 @@ class PacketLevelTrainer:
             leave=False
         )
 
-        for i, (packet_sequences, field_position, header_position, entry) in enumerate(self.train_loader):
+        for i, (packet_sequences, field_position, header_position, entry) in enumerate(progress_bar):
+            entry = {k: (v[0] if isinstance(v, list) else v) for k, v in entry.items()}
             packet_sequences = packet_sequences.squeeze(0).to(self.device)
             field_position = field_position.squeeze(0).to(self.device)
             header_position = header_position.squeeze(0).to(self.device)
@@ -129,10 +129,12 @@ class PacketLevelTrainer:
             if self.previous_entry is not None and current_packet_file != self.previous_packet_file:
                 if self.all_packet_encodings:
                     logger.info(f"Completed processing file: {self.previous_entry['packet']}")
-                    mpm_loss = self.process_encodings(self.all_packet_encodings, self.previous_entry["direction"])
+                    mpm_loss = self.process_encodings(self.all_packet_encodings, self.previous_entry)
                     self.optimizer.zero_grad()
                     mpm_loss.backward()
                     self.optimizer.step()
+                # else:
+                #     logger.info(f"No packet encodings found for file: {self.previous_entry['packet']}")
                 # reset
                 self.all_packet_encodings, self.total_packet_enc_loss = [], 0
                 self.previous_packet_id = None
@@ -201,15 +203,12 @@ class ExperimentRunner:
     def run(self):
         logger.info("Starting model training...")
         vocab = self.load_vocab()
-        # print("Available vocab keys:", list(vocab.keys())[:10], "...")  # print first 10
-        # print("'[CLSf]' in vocab?", "[CLSf]" in vocab)
         logger.info(f"Vocabulary size: {len(vocab)}")
-
 
         packet_embedding = PacketEmbedding(self.config.vocab_size, max_len=self.config.max_len, embed_dim=self.config.embed_dim, dropout=self.config.dropout).to(self.device)
         packet_encoder = PacketLevelEncoder(self.config.vocab_size, self.config.embed_dim, self.config.max_len, self.config.num_heads, self.config.num_layers, self.config.dropout).to(self.device)
         flow_embedding = FlowEmbedding(self.config.embed_dim, self.config.max_flow_length, self.config.dropout, vocab).to(self.device)
-        flow_encoder = FlowLevelEncoder(self.config.embed_dim, self.config.num_layers, self.config.num_heads, self.config.dropout, self.config.max_flow_length, self.config.mask_prob).to(self.device)
+        flow_encoder = FlowLevelEncoder(self.config.embed_dim, self.config.num_layers, self.config.num_heads, self.config.dropout, vocab, self.config.max_flow_length, self.config.mask_prob).to(self.device)
 
         trainer = PacketLevelTrainer(packet_embedding, packet_encoder, flow_embedding, flow_encoder)
 
@@ -218,5 +217,5 @@ class ExperimentRunner:
 
 if __name__ == "__main__":
     runner = ExperimentRunner()
-    # runner.run()
+    runner.run()
 

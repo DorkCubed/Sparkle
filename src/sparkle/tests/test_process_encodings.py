@@ -20,8 +20,7 @@ def test_process_encodings():
     packet_encoder = PacketLevelEncoder(config.vocab_size, config.embed_dim, config.max_len,
                                         config.num_heads, config.num_layers, config.dropout).to(device)
     flow_embedding = FlowEmbedding(config.embed_dim, config.max_flow_length, config.dropout, vocab).to(device)
-    flow_encoder = FlowLevelEncoder(config.embed_dim, config.num_layers, config.num_heads, config.dropout,
-                                    config.max_flow_length, config.mask_prob).to(device)
+    flow_encoder = FlowLevelEncoder(config.embed_dim, config.num_layers, config.num_heads, config.dropout, vocab, config.max_flow_length, config.mask_prob).to(device)
 
     trainer = PacketLevelTrainer(packet_embedding, packet_encoder, flow_embedding, flow_encoder)
 
