@@ -12,7 +12,7 @@ class FlowLevelEncoder(nn.Module):
         self.n_layers = n_layers
         self.attn_heads = attn_heads
         self.dropout = dropout
-        self.max_flow_length = max_flow_length
+        self.max_flow_length =  int(max_flow_length)
         self.mask_prob = mask_prob
         self.vocab = vocab
 

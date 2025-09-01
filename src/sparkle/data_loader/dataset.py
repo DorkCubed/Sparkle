@@ -31,14 +31,11 @@ class PacketSequenceDataset(Dataset):
         with open(self.manifest_path, 'r') as f:
             data = json.load(f)
 
-        files = [{
-            "packet": m["packet"],
-            "header": m["header"],
-            "field": m["field"],
-            "direction": m["direction"]
-        }
+        files = [
+            {k: m[k] for k in ("packet", "header", "field", "direction")}
             for m in data
         ]
+
         return files
 
     def _read_s3_file(self, s3_path):
