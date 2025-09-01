@@ -4,6 +4,7 @@ import torch.optim as optim
 from tqdm import tqdm
 import logging
 import os
+from pathlib import Path
 from datetime import datetime
 from sparkle.model.embedding import PacketEmbedding, FlowEmbedding
 from sparkle.model.flow_encoder import FlowLevelEncoder
@@ -66,10 +67,12 @@ class PacketLevelTrainer:
     # TODO (done): fix this to be compatible with manifest.json logic
     # TODO (test)
     def process_encodings(self, encodings, entry):
+        logger.info(f"Starting process encoding for {entry["direction"]}")
         final_packet_encodings = torch.cat(encodings, dim=0).to(self.device)
         logger.info(f"Final concatenated shape: {final_packet_encodings.shape}")
 
-        direction_file_path = entry["direction"]
+        # TODO: use better syntax
+        direction_file_path = Path(entry["direction"][0])
         with open(direction_file_path, 'r', encoding="utf-8") as file:
             direction_data = [int(line.strip()) for line in file.readlines()]
 
@@ -77,7 +80,7 @@ class PacketLevelTrainer:
         direction_tensor = torch.tensor(direction_data, device=self.device)
         logger.debug(f"Device - Final packet encodings: {final_packet_encodings.device}, Direction tensor: {direction_tensor.device}")
         # Call FlowEmbedding with the accumulated packet encodings and direction data
-        flow_embeddings, pad_indices = FlowEmbedding(final_packet_encodings, direction_tensor)
+        flow_embeddings, pad_indices = self.flow_embedding(final_packet_encodings, direction_tensor)
         logger.info(f"Flow embeddings computed for packet: {direction_file_path}")
         logger.debug(f"Flow embeddings shape: {flow_embeddings.shape}")
         logger.debug("-" * 60)
@@ -198,6 +201,8 @@ class ExperimentRunner:
     def run(self):
         logger.info("Starting model training...")
         vocab = self.load_vocab()
+        # print("Available vocab keys:", list(vocab.keys())[:10], "...")  # print first 10
+        # print("'[CLSf]' in vocab?", "[CLSf]" in vocab)
         logger.info(f"Vocabulary size: {len(vocab)}")
 
 
@@ -213,4 +218,5 @@ class ExperimentRunner:
 
 if __name__ == "__main__":
     runner = ExperimentRunner()
-    runner.run()
+    # runner.run()
+
