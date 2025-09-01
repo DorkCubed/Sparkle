@@ -137,7 +137,7 @@ class PacketLevelTrainer:
                 #     logger.info(f"No packet encodings found for file: {self.previous_entry['packet']}")
                 # reset
                 self.all_packet_encodings, self.total_packet_enc_loss = [], 0
-                self.previous_packet_id = None
+                # self.previous_packet_id = None
                 logger.info(f"Starting new file: {current_packet_file}")
 
             self.previous_packet_file = current_packet_file
@@ -165,14 +165,14 @@ class PacketLevelTrainer:
             # TODO: test this, does it work with manifest.json?
             # detect packet number
             if self.previous_entry and self.previous_entry["packet"] != current_packet_file:
-                logger.info(f"Flow completed for packet {self.previous_packet_id}")
+                logger.info(f"Flow completed for packet {self.previous_packet_file}")
                 self.all_packet_encodings = []
 
             self.previous_entry = entry
         # handle last file after loop
         if self.all_packet_encodings and self.previous_entry["packet"]:
             logger.info(
-                f"Final processing for last flow packet {self.previous_packet_id} "
+                f"Final processing for last flow packet {self.previous_packet_file} "
                 f"in file {self.previous_packet_file}"
             )
             mpm_loss = self.process_encodings(self.all_packet_encodings, self.previous_entry)
