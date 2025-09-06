@@ -180,6 +180,39 @@ class PacketLevelTrainer:
             mpm_loss.backward()
             self.optimizer.step()
 
+    def save_checkpoint(self, epoch, checkpoint_dir="checkpoints"):
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        checkpoint_path = os.path.join(checkpoint_dir, f"checkpoint_{epoch + 1}.pth")
+
+        state = {
+            "epoch": epoch,
+            "packet_embedding": self.packet_embedding.state_dict(),
+            "packet_encoder": self.packet_encoder.state_dict(),
+            "flow_embedding": self.flow_embedding.state_dict(),
+            "flow_encoder": self.flow_encoder.state_dict(),
+            "optimizer": self.optimizer.state_dict(),
+            "accumulated_mlm_loss": self.accumulated_mlm_loss,
+            "accumulated_sfbo_loss": self.accumulated_sfbo_loss,
+        }
+        torch.save(state, checkpoint_path)
+        logger.info(f"Checkpoint saved to {checkpoint_path}")
+
+    def load_checkpoint(self, checkpoint_path):
+        checkpoint = torch.load(checkpoint_path, map_location=self.device)
+
+        self.packet_embedding.load_state_dict(checkpoint["packet_embedding"])
+        self.packet_encoder.load_state_dict(checkpoint["packet_encoder"])
+        self.flow_embedding.load_state_dict(checkpoint["flow_embedding"])
+        self.flow_encoder.load_state_dict(checkpoint["flow_encoder"])
+        self.optimizer.load_state_dict(checkpoint["optimizer"])
+
+        self.accumulated_mlm_loss = checkpoint.get("accumulated_mlm_loss", 0.0)
+        self.accumulated_sfbo_loss = checkpoint.get("accumulated_sfbo_loss", 0.0)
+
+        logger.info(f"Checkpoint loaded from {checkpoint_path} (epoch {checkpoint['epoch'] + 1})")
+        return checkpoint["epoch"]
+
+
 class ExperimentRunner:
     def __init__(self):
         logger.info("Initializing ExperimentRunner...")
@@ -214,6 +247,7 @@ class ExperimentRunner:
 
         for epoch in range(self.config.num_epochs):
             trainer.train_epoch(epoch)
+            trainer.save_checkpoint(epoch)
 
 if __name__ == "__main__":
     runner = ExperimentRunner()
