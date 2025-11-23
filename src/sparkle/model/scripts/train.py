@@ -4,7 +4,6 @@ import torch.optim as optim
 from tqdm import tqdm
 import logging
 import os
-from pathlib import Path
 from datetime import datetime
 from sparkle.model.embedding import PacketEmbedding, FlowEmbedding
 from sparkle.model.flow_encoder import FlowLevelEncoder
@@ -250,6 +249,7 @@ class ExperimentRunner:
             trainer.save_checkpoint(epoch)
 
 if __name__ == "__main__":
+    print("Found training file.")
     runner = ExperimentRunner()
     runner.run()
 
