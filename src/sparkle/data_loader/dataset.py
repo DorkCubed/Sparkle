@@ -20,8 +20,30 @@ class PacketSequenceDataset(Dataset):
         self.chunk_size = chunk_size
         self.total_chunks = []
 
-        for file in self.files:
-            num_lines = len(self._read_file(file["packet"]).splitlines())
+        self.cache = {
+            "packet": [],
+            "header": [],
+            "field": [],
+            "direction": []
+        }
+
+        # for file in self.files:
+        #     num_lines = len(self._read_file(file["packet"]).splitlines())
+        #     num_chunks = (num_lines + self.chunk_size - 1) // self.chunk_size
+        #     self.total_chunks.append(num_chunks)
+
+        for entry in self.files:
+            packet_text = self._read_s3_file(entry["packet"])
+            header_text = self._read_s3_file(entry["header"])
+            field_text = self._read_s3_file(entry["field"])
+            direction_text = self._read_s3_file(entry["direction"])
+
+            self.cache["packet"].append(packet_text.splitlines())
+            self.cache["header"].append(header_text)
+            self.cache["field"].append(field_text)
+            self.cache["direction"].append(direction_text)
+
+            num_lines = len(self.cache["packet"][-1])
             num_chunks = (num_lines + self.chunk_size - 1) // self.chunk_size
             self.total_chunks.append(num_chunks)
 
@@ -60,14 +82,20 @@ class PacketSequenceDataset(Dataset):
             raise IndexError("Index out of range")
 
         entry = self.files[file_idx]
-        packet_path, header_path, field_path, direction_path = (
-            entry["packet"],
-            entry["header"],
-            entry["field"],
-            entry["direction"]
-        )
+        # packet_path, header_path, field_path, direction_path = (
+        #     entry["packet"],
+        #     entry["header"],
+        #     entry["field"],
+        #     entry["direction"]
+        # )
 
-        hex_dumps = self._read_file(packet_path).splitlines()
+        hex_dumps = self.cache["packet"][file_idx]
+        header_text = self.cache["header"][file_idx]
+        field_text = self.cache["field"][file_idx]
+
+        # hex_dumps = self._read_file(packet_path).splitlines()
+        # padded_all_tokens, token_ids, mask, max_length = self.tokenizer.encode_packet(hex_dumps)
+
         padded_all_tokens, token_ids, mask, max_length = self.tokenizer.encode_packet(hex_dumps)
 
         # Slice out the chunk from token_ids
@@ -75,7 +103,7 @@ class PacketSequenceDataset(Dataset):
         chunk_end = min((line_idx + 1) * self.chunk_size, token_ids.size(0))
         chunk = token_ids[chunk_start:chunk_end]
 
-        field_position = field_pos(field_path, chunk_start, chunk_end)
-        header_position = header_pos(header_path, chunk_start, chunk_end)
+        field_position = field_pos(field_text, chunk_start, chunk_end)
+        header_position = header_pos(header_text, chunk_start, chunk_end)
 
         return chunk, field_position, header_position, entry
