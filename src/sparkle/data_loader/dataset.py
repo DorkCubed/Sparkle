@@ -109,6 +109,17 @@ class PacketSequenceDataset(Dataset):
             header_text = self.cache["header"][file_idx]
             field_text = self.cache["field"][file_idx]
 
+            print(f"The hex dump: {hex_dumps}")
+
+            for n, line in enumerate(hex_dumps):
+                s = line.strip().replace(" ", "")
+                if any(c not in "0123456789abcdefABCDEF" for c in s):
+                    logger.error(
+                        f"Invalid hex in packet {entry['packet']} "
+                        f"at line {n}: {repr(line)}"
+                    )
+                    raise ValueError(f"Invalid hex line at {entry['packet']}, line {n}")
+
             padded_all_tokens, token_ids, mask, max_length = self.tokenizer.encode_packet(hex_dumps)
 
             # Slice out the chunk from token_ids
