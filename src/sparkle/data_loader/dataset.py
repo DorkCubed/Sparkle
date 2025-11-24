@@ -8,7 +8,6 @@ from torch.utils.data import Dataset
 from sparkle.configs.config import Config
 from sparkle.data_loader.encoder.positional_encodings import field_pos, header_pos
 
-# 1. Setup Logger
 logger = Config.init_logger()
 
 
@@ -80,8 +79,7 @@ class PacketSequenceDataset(Dataset):
         # Change to logger.info if you want to see every single file read
         logger.debug(f"Reading file from S3: {s3_path}")
         try:
-            with self.fs.open(s3_path, "r") as f:
-                return f.read()
+            return self.fs.cat_file(s3_path).decode("utf-8")
         except Exception as e:
             logger.error(f"Error reading S3 path {s3_path}: {e}")
             raise
