@@ -7,11 +7,9 @@ from sparkle.data_loader.tokenizer.tokenizer import Tokenizer
 class DataModule:
     def __init__(self):
         print("Reached data module.")
-        self.config = Config()
-        print("Loaded config.")
 
+        self.config = Config()
         self.tokenizer = self._load_tokenizer()
-        print("Loaded tokenizer.")
 
         self.dataset = self._init_dataset()
         print("Loaded dataset.")
