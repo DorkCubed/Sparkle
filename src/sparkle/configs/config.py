@@ -1,6 +1,7 @@
 import os
 from sparkle.utils import get_project_root
-
+import logging
+from datetime import datetime
 
 class Config:
     def __init__(self):
@@ -41,3 +42,19 @@ class Config:
             from src.sparkle.data_loader.scripts.s3_utils import S3DataFetcher
             self.fetcher = S3DataFetcher(self.bucket)
             self.files = self.fetcher.list_split_objects(self.parents, split=self.split_folder)
+
+    @staticmethod
+    def init_logger():
+        os.makedirs('logs', exist_ok=True)
+        log_file = f'logs/training_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler(log_file),
+                logging.StreamHandler()
+            ]
+        )
+        logger = logging.getLogger(__name__)
+
+        return logger
