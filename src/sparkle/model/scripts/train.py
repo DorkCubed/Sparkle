@@ -240,13 +240,22 @@ class ExperimentRunner:
         print("Loading embeddings.")
 
         packet_embedding = PacketEmbedding(self.config.vocab_size, max_len=self.config.max_len, embed_dim=self.config.embed_dim, dropout=self.config.dropout).to(self.device)
+        print("Loaded packet embeddings.")
+
         packet_encoder = PacketLevelEncoder(self.config.vocab_size, self.config.embed_dim, self.config.max_len, self.config.num_heads, self.config.num_layers, self.config.dropout).to(self.device)
+        print("Loaded packet encoder.")
+
         flow_embedding = FlowEmbedding(self.config.embed_dim, self.config.max_flow_length, self.config.dropout, vocab).to(self.device)
+        print("Loaded flow embeddings.")
+
         flow_encoder = FlowLevelEncoder(self.config.embed_dim, self.config.num_layers, self.config.num_heads, self.config.dropout, vocab, self.config.max_flow_length, self.config.mask_prob).to(self.device)
+        print("Loaded flow encoder.")
 
         print("Loaded embeddings.")
 
         trainer = PacketLevelTrainer(packet_embedding, packet_encoder, flow_embedding, flow_encoder)
+
+        print("Loaded trainer.")
 
         for epoch in range(self.config.num_epochs):
             trainer.train_epoch(epoch)

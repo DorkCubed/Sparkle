@@ -57,8 +57,11 @@ if __name__ == "__main__":
     project_dir = get_project_root()
 
     original_manifest_path = config.manifest_path
-    sampled_manifest_path = os.path.join(project_dir, "manifest", "manifest_1000.json")
+
+    sample_length = 10
+
+    sampled_manifest_path = os.path.join(project_dir, "manifest", f"manifest_{sample_length}.json")
 
     manifest = fetcher.load_manifest_json(original_manifest_path)
-    sampled = fetcher.sample_manifest(manifest, k=1000)
+    sampled = fetcher.sample_manifest(manifest, k=sample_length)
     fetcher.save_manifest_to_json(sampled, sampled_manifest_path)
