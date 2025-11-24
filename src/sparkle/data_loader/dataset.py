@@ -37,23 +37,15 @@ class PacketSequenceDataset(Dataset):
         }
 
         for entry in tqdm(self.files, desc="Loading PacketSequenceDataset"):
-            try:
-                packet_text = self._read_s3_file(entry["packet"])
-                header_text = self._read_s3_file(entry["header"])
-                field_text = self._read_s3_file(entry["field"])
-                direction_text = self._read_s3_file(entry["direction"])
+            self.cache["packet"].append(entry["packet"])
+            self.cache["header"].append(entry["header"])
+            self.cache["field"].append(entry["field"])
+            self.cache["direction"].append(entry["direction"])
 
-                self.cache["packet"].append(packet_text.splitlines())
-                self.cache["header"].append(header_text)
-                self.cache["field"].append(field_text)
-                self.cache["direction"].append(direction_text)
-
-                num_lines = len(self.cache["packet"][-1])
-                num_chunks = (num_lines + self.chunk_size - 1) // self.chunk_size
-                self.total_chunks.append(num_chunks)
-            except Exception as e:
-                logger.error(f"Failed to load S3 data for entry {entry}: {e}")
-                raise e
+            text = self._read_s3_file(entry["packet"])
+            num_lines = len(text.splitlines())
+            num_chunks = (num_lines + self.chunk_size - 1) // self.chunk_size
+            self.total_chunks.append(num_chunks)
 
         self.total_len = sum(self.total_chunks)
         logger.info(f"Dataset initialization complete. Total samples (chunks): {self.total_len}")
