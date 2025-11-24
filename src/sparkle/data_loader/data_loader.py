@@ -8,9 +8,17 @@ class DataModule:
     def __init__(self):
         print("Reached data module.")
         self.config = Config()
+        print("Loaded config.")
+
         self.tokenizer = self._load_tokenizer()
+        print("Loaded tokenizer.")
+
         self.dataset = self._init_dataset()
+        print("Loaded dataset.")
+
         self.train_loader = self._init_dataloader()
+        print("Init dataloader.")
+
         print("Initiated data module.")
 
     def _load_tokenizer(self):
