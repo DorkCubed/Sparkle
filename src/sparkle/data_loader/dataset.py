@@ -1,7 +1,7 @@
 import json
 import logging
 from pathlib import Path
-
+from tqdm import tqdm
 from s3fs import S3FileSystem
 from torch.utils.data import Dataset
 
@@ -37,13 +37,7 @@ class PacketSequenceDataset(Dataset):
             "direction": []
         }
 
-        # 2. Added enumeration to track progress
-        total_files = len(self.files)
-        for i, entry in enumerate(self.files):
-            # Log progress every 10 files (or every file if you prefer) to track S3 download speed
-            if (i + 1) % 10 == 0 or i == 0:
-                logger.info(f"Loading S3 data for file {i + 1}/{total_files}...")
-
+        for entry in tqdm(self.files, desc="Loading PacketSequenceDataset"):
             try:
                 packet_text = self._read_s3_file(entry["packet"])
                 header_text = self._read_s3_file(entry["header"])
