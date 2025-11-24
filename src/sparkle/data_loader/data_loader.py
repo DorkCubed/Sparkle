@@ -6,10 +6,12 @@ from sparkle.data_loader.tokenizer.tokenizer import Tokenizer
 
 class DataModule:
     def __init__(self):
+        print("Reached data module.")
         self.config = Config()
         self.tokenizer = self._load_tokenizer()
         self.dataset = self._init_dataset()
         self.train_loader = self._init_dataloader()
+        print("Initiated data module.")
 
     def _load_tokenizer(self):
         return Tokenizer(vocab_file=self.config.tokenizer_path)
