@@ -20,9 +20,10 @@ class Config:
         self.tokenizer_path = os.path.join(parent_dir, "data_loader", "tokenizer", "vocab.txt")
         # self.manifest_path = os.path.join(parent_dir, "manifest", "manifest.json")
         # self.manifest_path = os.path.join(parent_dir, "manifest", "test_manifest.json")
-        # self.manifest_path = os.path.join(project_root, "manifest", "manifest.json")
+        self.manifest_path = os.path.join(project_root, "manifest", "manifest.json")
         # self.manifest_path = os.path.join(project_root, "manifest", "manifest_1000.json")
         # self.manifest_path = os.path.join(project_root, "manifest", "manifest_10.json")
+        # self.manifest_path = os.path.join(project_root, "manifest", "manifest_100.json")
         self.manifest_path = os.path.join(project_root, "manifest", "local_manifest_10.json")
         self.batch_size = 1
         self.shuffle = False

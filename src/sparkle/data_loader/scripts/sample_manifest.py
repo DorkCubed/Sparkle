@@ -58,7 +58,7 @@ if __name__ == "__main__":
 
     original_manifest_path = config.manifest_path
 
-    sample_length = 10
+    sample_length = 100
 
     sampled_manifest_path = os.path.join(project_dir, "manifest", f"manifest_{sample_length}.json")
 
