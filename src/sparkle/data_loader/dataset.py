@@ -38,7 +38,7 @@ class PacketSequenceDataset(Dataset):
         }
 
         for file in self.files:
-            num_lines = len(self._read_s3_file(file["packet"]).splitlines())
+            num_lines = len(self._read_file(file["packet"]).splitlines())
             num_chunks = (num_lines + self.chunk_size - 1) // self.chunk_size
             self.total_chunks.append(num_chunks)
 
@@ -99,7 +99,7 @@ class PacketSequenceDataset(Dataset):
         )
 
         try:
-            hex_dumps = self._read_s3_file(packet_path).splitlines()
+            hex_dumps = self._read_file(packet_path).splitlines()
 
             # path = Path(os.path.join(self.config.logging_dir, "output.txt"))
             # path.parent.mkdir(parents=True, exist_ok=True)
