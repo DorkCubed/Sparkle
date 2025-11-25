@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from pathlib import Path
 from tqdm import tqdm
 from s3fs import S3FileSystem
@@ -36,14 +37,8 @@ class PacketSequenceDataset(Dataset):
             "direction": []
         }
 
-        for entry in tqdm(self.files, desc="Loading PacketSequenceDataset"):
-            self.cache["packet"].append(entry["packet"])
-            self.cache["header"].append(entry["header"])
-            self.cache["field"].append(entry["field"])
-            self.cache["direction"].append(entry["direction"])
-
-            text = self._read_s3_file(entry["packet"])
-            num_lines = len(text.splitlines())
+        for file in self.files:
+            num_lines = len(self._read_s3_file(file["packet"]).splitlines())
             num_chunks = (num_lines + self.chunk_size - 1) // self.chunk_size
             self.total_chunks.append(num_chunks)
 
@@ -69,12 +64,9 @@ class PacketSequenceDataset(Dataset):
 
     def _read_s3_file(self, s3_path):
         # Change to logger.info if you want to see every single file read
-        logger.debug(f"Reading file from S3: {s3_path}")
-        try:
-            return self.fs.cat_file(s3_path).decode("utf-8")
-        except Exception as e:
-            logger.error(f"Error reading S3 path {s3_path}: {e}")
-            raise
+        with self.fs.open(s3_path, 'r') as f:
+            return f.read()
+
 
     def _read_file(self, path):
         path = Path(path)
@@ -88,37 +80,42 @@ class PacketSequenceDataset(Dataset):
         file_idx = 0
         line_idx = 0
 
-        # Logic to find the correct file and line index
-        found = False
         for i, num_chunks in enumerate(self.total_chunks):
             if cumulative_chunks + num_chunks > idx:
                 line_idx = idx - cumulative_chunks
-                file_idx = i
-                found = True
                 break
             cumulative_chunks += num_chunks
-
-        if not found:
-            logger.error(f"IndexError in __getitem__: idx {idx} out of range for total length {self.total_len}")
+        else:
             raise IndexError("Index out of range")
+
 
         entry = self.files[file_idx]
 
+        packet_path, header_path, field_path, direction_path = (
+            entry["packet"],
+            entry["header"],
+            entry["field"],
+            entry["direction"]
+        )
+
         try:
-            hex_dumps = self.cache["packet"][file_idx]
-            header_text = self.cache["header"][file_idx]
-            field_text = self.cache["field"][file_idx]
+            hex_dumps = self._read_s3_file(packet_path).splitlines()
 
-            print(f"The hex dump: {hex_dumps}")
-
-            for n, line in enumerate(hex_dumps):
-                s = line.strip().replace(" ", "")
-                if any(c not in "0123456789abcdefABCDEF" for c in s):
-                    logger.error(
-                        f"Invalid hex in packet {entry['packet']} "
-                        f"at line {n}: {repr(line)}"
-                    )
-                    raise ValueError(f"Invalid hex line at {entry['packet']}, line {n}")
+            # path = Path(os.path.join(self.config.logging_dir, "output.txt"))
+            # path.parent.mkdir(parents=True, exist_ok=True)
+            #
+            # print("Writing to file")
+            # with open(Path(path), "w", encoding="utf-8") as f:
+            #     f.write(hex_dumps)
+            #
+            #
+            # for i, line in enumerate(hex_dumps):
+            #     test = line.strip()
+            #     try:
+            #         bytes.fromhex(test)
+            #     except Exception as e
+            #         logger.error(f"Full packet at file_idx={file_idx}: {hex_dumps}")
+            #         raise
 
             padded_all_tokens, token_ids, mask, max_length = self.tokenizer.encode_packet(hex_dumps)
 
@@ -127,8 +124,8 @@ class PacketSequenceDataset(Dataset):
             chunk_end = min((line_idx + 1) * self.chunk_size, token_ids.size(0))
             chunk = token_ids[chunk_start:chunk_end]
 
-            field_position = field_pos(field_text, chunk_start, chunk_end)
-            header_position = header_pos(header_text, chunk_start, chunk_end)
+            field_position = field_pos(field_path, chunk_start, chunk_end)
+            header_position = header_pos(header_path, chunk_start, chunk_end)
 
             return chunk, field_position, header_position, entry
 

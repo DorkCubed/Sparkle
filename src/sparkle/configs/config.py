@@ -10,7 +10,7 @@ class Config:
         current_dir = os.path.dirname(__file__)
         self.split_folder = "split"
         parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir))
-
+        self.logging_dir = os.path.join(parent_dir, "logs")
         self.parents = [f"{self.bucket}/Working_folder/input_aws/Wireshark_Sample_PCAPs/split/", f"{self.bucket}/Working_folder/input_aws/"]
 
         # might potentially take time
@@ -23,6 +23,7 @@ class Config:
         # self.manifest_path = os.path.join(project_root, "manifest", "manifest.json")
         # self.manifest_path = os.path.join(project_root, "manifest", "manifest_1000.json")
         self.manifest_path = os.path.join(project_root, "manifest", "manifest_10.json")
+
         self.batch_size = 1
         self.shuffle = False
 
