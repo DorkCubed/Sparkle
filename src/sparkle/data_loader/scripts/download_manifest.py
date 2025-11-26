@@ -64,7 +64,6 @@ def process_direction():
         except ValueError as e:
             if os.path.exists(direction_file):
                 fields_removed += 1
-        encode_file(direction_file)
 
     with open(OUTPUT_MANIFEST, "w") as f:
         json.dump(cleaned_manifest, f, indent=4)
