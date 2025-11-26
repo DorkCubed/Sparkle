@@ -8,3 +8,4 @@ __pycache__/
 manifest/
 src/sparkle/logs/
 logs/
+/dataset/local_10/
