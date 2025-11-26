@@ -15,49 +15,47 @@ class Tokenizer:
             return vocab
 
     def encode_packet(self, input_file):
-        import re
+        """
+        Encode a list of hex dumps into a list of padded tokens.
 
+        Parameters
+        ----------
+        input_file : list of str
+            A list of hex dumps.
+
+        Returns
+        -------
+        padded_all_tokens : list of list of str
+            A list of padded tokens.
+        token_ids : torch.Tensor
+            A tensor of token IDs.
+        mask : torch.Tensor
+            A tensor of mask values.
+        max_length : int
+            The maximum length of the padded tokens.
+        """
         all_tokens = []
-        hex_pattern = re.compile(r'^[0-9a-fA-F ]+$')
-
         for hex_dump in input_file:
-            cleaned = hex_dump.strip()
-
-            # Validate hex dump
-            if not cleaned or not hex_pattern.match(cleaned):
-                print(f"Invalid hex dump skipped: {repr(hex_dump)}")
-                # Represent this line as a single error token rather than dropping it
-                tokens = ['[CLSp]', '[BADHEX]', '[SEP]']
-                all_tokens.append(tokens)
-                continue
-
+            tokens = []
             try:
-                byte_data = list(bytes.fromhex(cleaned))
-            except ValueError:
-                print(f"Non-parseable hex dump skipped: {repr(hex_dump)}")
-                tokens = ['[CLSp]', '[BADHEX]', '[SEP]']
-                all_tokens.append(tokens)
+                byte_data = list(bytes.fromhex(hex_dump))
+            except ValueError as e:
+                print(f"Failed hex dump: {repr(hex_dump)}")
                 continue
-
-            tokens = ['[CLSp]'] + [str(b) for b in byte_data] + ['[SEP]']
+            tokens = [str(token) for token in byte_data]
+            tokens = ['[CLSp]'] + tokens + ['[SEP]']
             all_tokens.append(tokens)
 
-        # Padding
         max_length = max(len(sublist) for sublist in all_tokens)
-        padded_all_tokens = [
-            sublist + ['[PAD]'] * (max_length - len(sublist))
-            for sublist in all_tokens
-        ]
+        padded_all_tokens = [sublist + ['[PAD]'] *
+                             (max_length - len(sublist)) for sublist in all_tokens]
 
-        token_ids = torch.tensor([
-            [self.vocab.get(tok, self.vocab.get('[UNK]', 0)) for tok in sub]
-            for sub in padded_all_tokens
-        ], dtype=torch.long)
+        token_ids = torch.tensor([[self.vocab.get(token, self.vocab.get(
+            '[UNK]', 0)) for token in sublist] for sublist in padded_all_tokens], dtype=torch.long)
 
-        mask = token_ids != self.vocab.get('[PAD]', 0)
+        mask = ~torch.isin(token_ids, torch.tensor([0]))
 
-        return padded_all_tokens, token_ids, mask, max_length
-
+        return padded_all_tokens, token_ids, mask, max_length  # save the max len value
 
     def decode(self, token_ids):
         tokens = [[token for token, id_ in self.vocab.items() if id_ in sublist]
