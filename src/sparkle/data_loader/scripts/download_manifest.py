@@ -63,7 +63,6 @@ def process_direction():
             cleaned_manifest.append(item)
         except ValueError as e:
             if os.path.exists(direction_file):
-                os.remove(direction_file)
                 fields_removed += 1
         encode_file(direction_file)
 
