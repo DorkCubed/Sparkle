@@ -30,6 +30,7 @@ class PacketLevelTrainer:
         self.config = Config()
         self.vocab = self._init_vocab()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.skipped = 0
 
         self.packet_embedding = packet_embedding.to(self.device)
         self.packet_encoder = packet_encoder.to(self.device)
@@ -66,48 +67,69 @@ class PacketLevelTrainer:
     # TODO (done): fix this to be compatible with manifest.json logic
     # TODO (test)
     def process_encodings(self, encodings, entry):
-        logger.info(f"Starting process encoding for {entry}")
-        final_packet_encodings = torch.cat(encodings, dim=0).to(self.device)
-        logger.info(f"Final concatenated shape: {final_packet_encodings.shape}")
+        try:
+            logger.info(f"Starting process encoding for {entry}")
 
-        direction_file_path = entry["direction"]
-        with open(direction_file_path, 'r', encoding="utf-8") as file:
-            direction_data = [int(line.strip()) for line in file.readlines()]
+            if not encodings:
+                logger.error("process_encodings called with empty encodings list.")
+                return None
 
-        # Convert direction data to a tensor
-        direction_tensor = torch.tensor(direction_data, device=self.device)
-        logger.debug(f"Device - Final packet encodings: {final_packet_encodings.device}, Direction tensor: {direction_tensor.device}")
-        # Call FlowEmbedding with the accumulated packet encodings and direction data
-        flow_embeddings, pad_indices = self.flow_embedding(final_packet_encodings, direction_tensor)
-        logger.info(f"Flow embeddings computed for packet: {direction_file_path}")
-        logger.debug(f"Flow embeddings shape: {flow_embeddings.shape}")
-        logger.debug("-" * 60)
+            try:
+                final_packet_encodings = torch.cat(encodings, dim=0).to(self.device)
+            except Exception as e:
+                logger.exception(f"Failed concatenating encodings: {e}")
+                return None
 
-        # Compute flow encoding and MPM loss
-        flow_encoding, mpm_loss = self.flow_encoder(flow_embeddings, pad_indices)
-        logger.debug(f"Flow encoding shape: {flow_encoding.shape}")
-        logger.info(f"MPM loss: {mpm_loss}")
-        logger.debug(f"MPM loss type: {type(mpm_loss)}")
+            logger.info(f"Final concatenated shape: {final_packet_encodings.shape}")
 
-        # Ensure mpm_loss is a tensor and on the same device
-        mpm_loss_tensor = mpm_loss[0].to(self.device)
-        logger.debug(f"MPM loss tensor: {mpm_loss_tensor}")
-        return mpm_loss_tensor
+            direction_file_path = entry.get("direction")
+            if direction_file_path is None:
+                logger.error("Entry missing required key 'direction'.")
+                return None
 
-    def backward_and_optimize(self, accumulated_mlm_loss, accumulated_sfbo_loss):
-        total_accumulated_loss = accumulated_mlm_loss + accumulated_sfbo_loss
-        self.optimizer.zero_grad()
-        total_accumulated_loss.backward()
-        self.optimizer.step()
-        self.accumulated_mlm_loss = 0.0
-        self.accumulated_sfbo_loss = 0.0
-        self.batch_counter = 0
+            try:
+                with open(direction_file_path, 'r', encoding="utf-8") as file:
+                    direction_data = [int(line.strip()) for line in file.readlines()]
+            except Exception as e:
+                logger.exception(f"Failed reading direction file {direction_file_path}: {e}")
+                return None
 
-    # TODO: test this, especially loss logic
+            try:
+                direction_tensor = torch.tensor(direction_data, device=self.device)
+            except Exception as e:
+                logger.exception(f"Failed creating direction tensor: {e}")
+                return None
+
+            try:
+                flow_embeddings, pad_indices = self.flow_embedding(final_packet_encodings, direction_tensor)
+            except Exception as e:
+                logger.exception(f"FlowEmbedding forward pass failed: {e}")
+                return None
+
+            logger.info(f"Flow embeddings computed for packet: {direction_file_path}")
+
+            try:
+                flow_encoding, mpm_loss = self.flow_encoder(flow_embeddings, pad_indices)
+            except Exception as e:
+                logger.exception(f"FlowEncoder forward pass failed: {e}")
+                return None
+
+            try:
+                mpm_loss_tensor = mpm_loss[0].to(self.device)
+            except Exception as e:
+                logger.exception(f"Failed extracting MPM loss tensor: {e}")
+                return None
+
+            return mpm_loss_tensor
+
+        except Exception as e:
+            logger.exception(f"Unexpected error inside process_encodings: {e}")
+            return None
+
     def train_epoch(self, epoch):
-        logger.info(f"\n{'='*30}")
+        logger.info(f"\n{'=' * 30}")
         logger.info(f"Starting training epoch {epoch + 1}")
-        logger.info(f"{'='*30}")
+        logger.info(f"{'=' * 30}")
 
         progress_bar = tqdm(
             self.train_loader,
@@ -116,68 +138,99 @@ class PacketLevelTrainer:
             leave=False
         )
 
-        for i, (packet_sequences, field_position, header_position, entry) in enumerate(progress_bar):
-            entry = {k: (v[0] if isinstance(v, list) else v) for k, v in entry.items()}
-            packet_sequences = packet_sequences.squeeze(0).to(self.device)
-            field_position = field_position.squeeze(0).to(self.device)
-            header_position = header_position.squeeze(0).to(self.device)
+        for i, batch in enumerate(progress_bar):
+            try:
+                packet_sequences, field_position, header_position, entry = batch
+            except Exception as e:
+                logger.exception(f"Failed unpacking batch {i}: {e}")
+                continue
 
-            current_packet_file = entry["packet"]
+            try:
+                entry = {k: (v[0] if isinstance(v, list) else v) for k, v in entry.items()}
+            except Exception as e:
+                logger.exception(f"Malformed entry structure for batch {i}: {e}")
+                continue
 
-            # finalize previous file, then switch to new file
-            if self.previous_entry is not None and current_packet_file != self.previous_packet_file:
-                if self.all_packet_encodings:
-                    logger.info(f"Completed processing file: {self.previous_entry['packet']}")
-                    mpm_loss = self.process_encodings(self.all_packet_encodings, self.previous_entry)
-                    self.optimizer.zero_grad()
-                    mpm_loss.backward()
-                    self.optimizer.step()
-                # else:
-                #     logger.info(f"No packet encodings found for file: {self.previous_entry['packet']}")
-                # reset
-                self.all_packet_encodings, self.total_packet_enc_loss = [], 0
-                # self.previous_packet_id = None
-                logger.info(f"Starting new file: {current_packet_file}")
+            try:
+                packet_sequences = packet_sequences.squeeze(0).to(self.device)
+                field_position = field_position.squeeze(0).to(self.device)
+                header_position = header_position.squeeze(0).to(self.device)
+            except Exception as e:
+                logger.exception(f"Tensor/device error in batch {i}: {e}")
+                continue
 
-            self.previous_packet_file = current_packet_file
+            current_packet_file = entry.get("packet")
+            if current_packet_file is None:
+                logger.error("Missing required entry['packet'] in batch, skipping.")
+                continue
 
-            # forward pass (packet level)
-            mlm_loss, sfbo_loss, encoded_packets_mean = self.packet_encoder(
-                packet_sequences, field_pos=field_position, header_pos=header_position
-            )
+            # Handle file transitions safely
+            try:
+                if self.previous_entry is not None and current_packet_file != self.previous_packet_file:
+                    if self.all_packet_encodings:
+                        logger.info(f"Completed processing file: {self.previous_entry['packet']}")
+                        mpm_loss = self.process_encodings(self.all_packet_encodings, self.previous_entry)
+                        if mpm_loss is not None:
+                            self.optimizer.zero_grad()
+                            mpm_loss.backward()
+                            self.optimizer.step()
+                    self.all_packet_encodings = []
+                    self.total_packet_enc_loss = 0
+                    logger.info(f"Starting new file: {current_packet_file}")
 
-            # accumulate
-            self.accumulated_mlm_loss += mlm_loss
-            self.accumulated_sfbo_loss += sfbo_loss
-            self.batch_counter += 1
+                self.previous_packet_file = current_packet_file
+            except Exception as e:
+                logger.exception(f"Error during file-boundary logic: {e}")
+                continue
 
-            progress_bar.set_postfix({
-                "mlm_loss": f"{self.accumulated_mlm_loss:.4f}",
-                "sfbo_loss": f"{self.accumulated_sfbo_loss:.4f}"
-            })
+            # Packet-level forward pass
+            try:
+                mlm_loss, sfbo_loss, encoded_packets_mean = self.packet_encoder(
+                    packet_sequences, field_pos=field_position, header_pos=header_position
+                )
+            except Exception as e:
+                logger.exception(f"Packet encoder forward failed in batch {i}: {e}")
+                self.skipped += 1
+                continue
 
+            # Accumulate losses
+            try:
+                self.accumulated_mlm_loss += mlm_loss
+                self.accumulated_sfbo_loss += sfbo_loss
+                self.batch_counter += 1
+            except Exception as e:
+                logger.exception(f"Loss accumulation error in batch {i}: {e}")
+                continue
+
+            # Gradient update when accumulation threshold hits
             if self.batch_counter == self.accumulation_steps:
-                self.backward_and_optimize(self.accumulated_mlm_loss, self.accumulated_sfbo_loss)
+                try:
+                    self.backward_and_optimize(self.accumulated_mlm_loss, self.accumulated_sfbo_loss)
+                except Exception as e:
+                    logger.exception(f"Backward pass failed during accumulation: {e}")
+                    self.accumulated_mlm_loss = 0.0
+                    self.accumulated_sfbo_loss = 0.0
+                    self.batch_counter = 0
+                    continue
 
-            self.all_packet_encodings.append(encoded_packets_mean.detach())
-
-            # TODO: test this, does it work with manifest.json?
-            # detect packet number
-            if self.previous_entry and self.previous_entry["packet"] != current_packet_file:
-                logger.info(f"Flow completed for packet {self.previous_packet_file}")
-                self.all_packet_encodings = []
+            try:
+                self.all_packet_encodings.append(encoded_packets_mean.detach())
+            except Exception as e:
+                logger.exception(f"Failed storing encoded packet mean: {e}")
 
             self.previous_entry = entry
-        # handle last file after loop
-        if self.all_packet_encodings and self.previous_entry["packet"]:
-            logger.info(
-                f"Final processing for last flow packet {self.previous_packet_file} "
-                f"in file {self.previous_packet_file}"
-            )
-            mpm_loss = self.process_encodings(self.all_packet_encodings, self.previous_entry)
-            self.optimizer.zero_grad()
-            mpm_loss.backward()
-            self.optimizer.step()
+
+        # Final file after loop
+        try:
+            if self.all_packet_encodings and self.previous_entry["packet"]:
+                logger.info(f"Final processing for last flow packet {self.previous_packet_file}")
+                final_loss = self.process_encodings(self.all_packet_encodings, self.previous_entry)
+                if final_loss is not None:
+                    self.optimizer.zero_grad()
+                    final_loss.backward()
+                    self.optimizer.step()
+        except Exception as e:
+            logger.exception(f"Final mpm_loss computation failed: {e}")
 
     def save_checkpoint(self, epoch, checkpoint_dir="checkpoints"):
         os.makedirs(checkpoint_dir, exist_ok=True)
@@ -237,21 +290,16 @@ class ExperimentRunner:
         vocab = self.load_vocab()
         logger.info(f"Vocabulary size: {len(vocab)}")
 
-        print("Loading embeddings.")
-
+        # print("Loading embeddings.")
         packet_embedding = PacketEmbedding(self.config.vocab_size, max_len=self.config.max_len, embed_dim=self.config.embed_dim, dropout=self.config.dropout).to(self.device)
-        print("Loaded packet embeddings.")
-
+        # print("Loaded packet embeddings.")
         packet_encoder = PacketLevelEncoder(self.config.vocab_size, self.config.embed_dim, self.config.max_len, self.config.num_heads, self.config.num_layers, self.config.dropout).to(self.device)
-        print("Loaded packet encoder.")
-
+        # print("Loaded packet encoder.")
         flow_embedding = FlowEmbedding(self.config.embed_dim, self.config.max_flow_length, self.config.dropout, vocab).to(self.device)
-        print("Loaded flow embeddings.")
-
+        # print("Loaded flow embeddings.")
         flow_encoder = FlowLevelEncoder(self.config.embed_dim, self.config.num_layers, self.config.num_heads, self.config.dropout, vocab, self.config.max_flow_length, self.config.mask_prob).to(self.device)
-        print("Loaded flow encoder.")
-
-        print("Loaded embeddings.")
+        # print("Loaded flow encoder.")
+        # print("Loaded embeddings.")
 
         trainer = PacketLevelTrainer(packet_embedding, packet_encoder, flow_embedding, flow_encoder)
 
@@ -262,7 +310,6 @@ class ExperimentRunner:
             trainer.save_checkpoint(epoch)
 
 if __name__ == "__main__":
-    print("Found training file.")
     runner = ExperimentRunner()
     runner.run()
 
