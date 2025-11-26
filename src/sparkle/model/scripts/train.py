@@ -220,6 +220,10 @@ class PacketLevelTrainer:
 
             self.previous_entry = entry
 
+            progress_bar.set_postfix({
+                "skipped due to mismatch in tensor lengths": self.skipped
+            })
+
         # Final file after loop
         try:
             if self.all_packet_encodings and self.previous_entry["packet"]:
