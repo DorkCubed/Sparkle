@@ -36,7 +36,5 @@ def load_losses(checkpoint_path):
     return mlm_loss, sfbo_loss
 
 
-# Example Usage:
-# Assuming you want to load epoch 1 (which corresponds to file checkpoint_1.pth)
 path = os.path.join(project_root, "src", "checkpoints", "checkpoint_1.pth")
 load_losses(path)
