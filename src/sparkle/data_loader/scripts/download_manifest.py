@@ -11,7 +11,7 @@ from pathlib import Path
 config = Config()
 INPUT_MANIFEST = config.manifest_path
 project_root = get_project_root()
-OUTPUT_MANIFEST = os.path.join(project_root, "manifest", "local_manifest_10.json")
+OUTPUT_MANIFEST = os.path.join(project_root, "manifest", "local_manifest.json")
 
 LOCAL_BASE = os.path.join(project_root, "dataset", "local_10")
 
