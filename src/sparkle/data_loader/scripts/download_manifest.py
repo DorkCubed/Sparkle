@@ -7,6 +7,8 @@ from sparkle.utils import get_project_root
 from sparkle.model.utils.direction_encoder import encode_file
 from tqdm import tqdm
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed, Future
+from typing import Tuple
 
 config = Config()
 INPUT_MANIFEST = config.manifest_path
@@ -29,6 +31,12 @@ def download_s3_uri(uri: str, base: str) -> str:
     fs.get(f"{bucket}/{key}", local_path)
     return local_path
 
+def _download_item_fields(item: dict, fields: list) -> dict:
+    out = {}
+
+    for f_name in fields:
+        out[f_name] = download_s3_uri(item[f_name], LOCAL_BASE)
+    return out
 
 def process_manifest():
     with open(INPUT_MANIFEST, "r") as f:
@@ -37,14 +45,27 @@ def process_manifest():
     new_manifest = []
     fields = ["packet", "header", "field", "direction"]
 
-    for item in tqdm(manifest, desc="Downloading manifest"):
-        out = {"flow": item["flow"]}
-        for f_name in fields:
-            out[f_name] = download_s3_uri(item[f_name], LOCAL_BASE)
-        new_manifest.append(out)
+    futures = []
+
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        for item in manifest:
+            flow = item["flow"]
+            future = executor.submit(_download_item_fields, manifest, fields)
+            futures.append((flow, future))
+
+        for flow, future in tqdm(futures, desc="Downloading files"):
+            try:
+                out = future.result()
+                out["flow"] = flow
+                new_manifest.append(out)
+
+            except Exception:
+                continue
 
     with open(OUTPUT_MANIFEST, "w") as f:
         json.dump(new_manifest, f, indent=4)
+
+
 
 def process_direction():
     with open(OUTPUT_MANIFEST, "r") as f:
