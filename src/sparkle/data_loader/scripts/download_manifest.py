@@ -50,7 +50,7 @@ def process_manifest():
     with ThreadPoolExecutor(max_workers=10) as executor:
         for item in manifest:
             flow = item["flow"]
-            future = executor.submit(_download_item_fields, manifest, fields)
+            future = executor.submit(_download_item_fields, item, fields)
             futures.append((flow, future))
 
         for flow, future in tqdm(futures, desc="Downloading files"):
@@ -59,13 +59,20 @@ def process_manifest():
                 out["flow"] = flow
                 new_manifest.append(out)
 
-            except Exception:
+            except Exception as e:
+                print(f"Error processing item: {e}")
                 continue
+            except KeyboardInterrupt:
+                executor.shutdown(cancel_futures=True)
+                raise
+
+
+    os.makedirs(os.path.dirname(OUTPUT_MANIFEST), exist_ok=True)
 
     with open(OUTPUT_MANIFEST, "w") as f:
         json.dump(new_manifest, f, indent=4)
 
-
+    print(f"Manifest processing complete. Saved to {OUTPUT_MANIFEST}")
 
 def process_direction():
     with open(OUTPUT_MANIFEST, "r") as f:
@@ -92,5 +99,7 @@ def process_direction():
     print(f"Removed {fields_removed} fields. {len(cleaned_manifest)} entries now in manifest.")
 
 if __name__ == "__main__":
-    process_manifest()
-    
+    try:
+        process_manifest()
+    except KeyboardInterrupt:
+        print("Interrupted. Exiting.")
