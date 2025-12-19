@@ -206,7 +206,7 @@ for epoch in range(1):
 
                 # Clean up
                 # del mpm_loss, mlm_loss, sfbo_loss, encoded_packets_mean
-                torch.cuda.empty_cache()
+                # torch.cuda.empty_cache()
 
             # Reset file-specific variables
             all_packet_encodings = []
