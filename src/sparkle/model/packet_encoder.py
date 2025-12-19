@@ -65,7 +65,7 @@ class PacketLevelEncoder(nn.Module):
         # print("packet enc devices: ", mlm_loss.device, sfbo_loss.device, mask_encoded_packets.device,
         #       masked_packets.device, mean_encoded_packets.device)
         # del masked_packets, span_masks
-        torch.cuda.empty_cache()
+        # torch.cuda.empty_cache()
         return mlm_loss, sfbo_loss, mean_encoded_packets
     
     # def forward(self, packet_sequences, field_pos, header_pos):
