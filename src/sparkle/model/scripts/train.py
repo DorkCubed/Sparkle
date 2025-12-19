@@ -283,6 +283,13 @@ class ExperimentRunner:
         return vocab
 
     def run(self):
+        os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
+        os.environ['TORCH_USE_CUDA_DSA'] = "1"
+        
+        print("-" * 30)
+        print(f"CUDA_LAUNCH_BLOCKING: {os.environ.get('CUDA_LAUNCH_BLOCKING', 'Not Set')}")
+        print(f"TORCH_USE_CUDA_DSA:   {os.environ.get('TORCH_USE_CUDA_DSA', 'Not Set')}")
+        print("-" * 30)
         logger.info("Starting model training...")
         vocab = self.load_vocab()
         logger.info(f"Vocabulary size: {len(vocab)}")

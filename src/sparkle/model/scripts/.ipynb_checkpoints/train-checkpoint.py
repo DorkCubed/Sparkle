@@ -1,15 +1,17 @@
+import logging
+import os
+from datetime import datetime
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from tqdm import tqdm
-import logging
-import os
-from datetime import datetime
+
+from sparkle.configs.config import Config
+from sparkle.data_loader.data_loader import DataModule
 from sparkle.model.embedding import PacketEmbedding, FlowEmbedding
 from sparkle.model.flow_encoder import FlowLevelEncoder
 from sparkle.model.packet_encoder import PacketLevelEncoder
-from sparkle.data_loader.data_loader import DataModule
-from sparkle.configs.config import Config
 
 # Configure logging
 os.makedirs('logs', exist_ok=True)
@@ -23,6 +25,7 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
 
 class PacketLevelTrainer:
     def __init__(self, packet_embedding, packet_encoder, flow_embedding, flow_encoder):
@@ -39,9 +42,12 @@ class PacketLevelTrainer:
 
         self.train_loader = data_module.get_loader()
 
-
-        self.optimizer = optim.Adam(list(self.packet_embedding.parameters()) + list(self.flow_embedding.parameters()) + list(self.packet_encoder.parameters()) + list(self.flow_encoder.parameters()), lr=self.config.learning_rate)
+        self.optimizer = optim.Adam(
+            list(self.packet_embedding.parameters()) + list(self.flow_embedding.parameters()) + list(
+                self.packet_encoder.parameters()) + list(self.flow_encoder.parameters()), lr=self.config.learning_rate)
         criterion = nn.CrossEntropyLoss()
+
+        self.step_successful = False
 
         self.accumulation_steps = 5
         self.accumulated_mlm_loss = 0.0
@@ -126,6 +132,17 @@ class PacketLevelTrainer:
             logger.exception(f"Unexpected error inside process_encodings: {e}")
             return None
 
+    def backward_and_optimize(self, accumulated_mlm_loss, accumulated_sfbo_loss):
+
+        total_accumulated_loss = accumulated_mlm_loss + accumulated_sfbo_loss
+
+        self.optimizer.zero_grad()
+        total_accumulated_loss.backward()
+        self.optimizer.step()
+        self.accumulated_mlm_loss = 0.0
+        self.accumulated_sfbo_loss = 0.0
+        self.batch_counter = 0
+
     def train_epoch(self, epoch):
         logger.info(f"\n{'=' * 30}")
         logger.info(f"Starting training epoch {epoch + 1}")
@@ -138,32 +155,20 @@ class PacketLevelTrainer:
             leave=False
         )
 
-        for i, batch in enumerate(progress_bar):
-            try:
-                packet_sequences, field_position, header_position, entry = batch
-            except Exception as e:
-                logger.exception(f"Failed unpacking batch {i}: {e}")
-                continue
-
+        for i, (packet_sequences, field_position, header_position, entry) in enumerate(progress_bar):
             try:
                 entry = {k: (v[0] if isinstance(v, list) else v) for k, v in entry.items()}
-            except Exception as e:
-                logger.exception(f"Malformed entry structure for batch {i}: {e}")
-                continue
-
-            try:
                 packet_sequences = packet_sequences.squeeze(0).to(self.device)
                 field_position = field_position.squeeze(0).to(self.device)
                 header_position = header_position.squeeze(0).to(self.device)
+
+                current_packet_file = entry.get("packet")
+                if current_packet_file is None:
+                    logger.error("Missing required entry['packet'] in batch, skipping.")
+                    continue
             except Exception as e:
-                logger.exception(f"Tensor/device error in batch {i}: {e}")
+                logger.exception(f"Unexpected error inside batch {i}: {e}")
                 continue
-
-            current_packet_file = entry.get("packet")
-            if current_packet_file is None:
-                logger.error("Missing required entry['packet'] in batch, skipping.")
-                continue
-
             # Handle file transitions safely
             try:
                 if self.previous_entry is not None and current_packet_file != self.previous_packet_file:
@@ -174,6 +179,8 @@ class PacketLevelTrainer:
                             self.optimizer.zero_grad()
                             mpm_loss.backward()
                             self.optimizer.step()
+
+                    # reset for new file
                     self.all_packet_encodings = []
                     self.total_packet_enc_loss = 0
                     logger.info(f"Starting new file: {current_packet_file}")
@@ -181,48 +188,34 @@ class PacketLevelTrainer:
                 self.previous_packet_file = current_packet_file
             except Exception as e:
                 logger.exception(f"Error during file-boundary logic: {e}")
-                continue
 
             # Packet-level forward pass
             try:
                 mlm_loss, sfbo_loss, encoded_packets_mean = self.packet_encoder(
                     packet_sequences, field_pos=field_position, header_pos=header_position
                 )
-            except Exception as e:
-                logger.exception(f"Packet encoder forward failed in batch {i}: {e}")
-                self.skipped += 1
-                continue
 
-            # Accumulate losses
-            try:
                 self.accumulated_mlm_loss += mlm_loss
                 self.accumulated_sfbo_loss += sfbo_loss
                 self.batch_counter += 1
+
+                if self.batch_counter == self.accumulation_steps:
+                    self.backward_and_optimize(self.accumulated_mlm_loss, self.accumulated_sfbo_loss)
+
+                self.all_packet_encodings.append(encoded_packets_mean.detach())
+                self.step_successful = True
             except Exception as e:
                 logger.exception(f"Loss accumulation error in batch {i}: {e}")
-                continue
-
-            # Gradient update when accumulation threshold hits
-            if self.batch_counter == self.accumulation_steps:
-                try:
-                    self.backward_and_optimize(self.accumulated_mlm_loss, self.accumulated_sfbo_loss)
-                except Exception as e:
-                    logger.exception(f"Backward pass failed during accumulation: {e}")
-                    self.accumulated_mlm_loss = 0.0
-                    self.accumulated_sfbo_loss = 0.0
-                    self.batch_counter = 0
-                    continue
-
-            try:
-                self.all_packet_encodings.append(encoded_packets_mean.detach())
-            except Exception as e:
-                logger.exception(f"Failed storing encoded packet mean: {e}")
+                self.skipped += 1
 
             self.previous_entry = entry
 
             progress_bar.set_postfix({
-                "skipped due to mismatch in tensor lengths": self.skipped
+                "skipped": self.skipped
             })
+
+        logger.info("Reached last file.")
+        logger.info(f"self.previous_entry: {self.previous_entry}")
 
         # Final file after loop
         try:
@@ -290,18 +283,31 @@ class ExperimentRunner:
         return vocab
 
     def run(self):
+        os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
+        os.environ['TORCH_USE_CUDA_DSA'] = "1"
+        
+        print("-" * 30)
+        print(f"CUDA_LAUNCH_BLOCKING: {os.environ.get('CUDA_LAUNCH_BLOCKING', 'Not Set')}")
+        print(f"TORCH_USE_CUDA_DSA:   {os.environ.get('TORCH_USE_CUDA_DSA', 'Not Set')}")
+        print("-" * 30)
         logger.info("Starting model training...")
         vocab = self.load_vocab()
         logger.info(f"Vocabulary size: {len(vocab)}")
 
         # print("Loading embeddings.")
-        packet_embedding = PacketEmbedding(self.config.vocab_size, max_len=self.config.max_len, embed_dim=self.config.embed_dim, dropout=self.config.dropout).to(self.device)
+        packet_embedding = PacketEmbedding(self.config.vocab_size, max_len=self.config.max_len,
+                                           embed_dim=self.config.embed_dim, dropout=self.config.dropout).to(self.device)
         # print("Loaded packet embeddings.")
-        packet_encoder = PacketLevelEncoder(self.config.vocab_size, self.config.embed_dim, self.config.max_len, self.config.num_heads, self.config.num_layers, self.config.dropout).to(self.device)
+        packet_encoder = PacketLevelEncoder(self.config.vocab_size, self.config.embed_dim, self.config.max_len,
+                                            self.config.num_heads, self.config.num_layers, self.config.dropout).to(
+            self.device)
         # print("Loaded packet encoder.")
-        flow_embedding = FlowEmbedding(self.config.embed_dim, self.config.max_flow_length, self.config.dropout, vocab).to(self.device)
+        flow_embedding = FlowEmbedding(self.config.embed_dim, self.config.max_flow_length, self.config.dropout,
+                                       vocab).to(self.device)
         # print("Loaded flow embeddings.")
-        flow_encoder = FlowLevelEncoder(self.config.embed_dim, self.config.num_layers, self.config.num_heads, self.config.dropout, vocab, self.config.max_flow_length, self.config.mask_prob).to(self.device)
+        flow_encoder = FlowLevelEncoder(self.config.embed_dim, self.config.num_layers, self.config.num_heads,
+                                        self.config.dropout, vocab, self.config.max_flow_length,
+                                        self.config.mask_prob).to(self.device)
         # print("Loaded flow encoder.")
         # print("Loaded embeddings.")
 
@@ -313,7 +319,7 @@ class ExperimentRunner:
             trainer.train_epoch(epoch)
             trainer.save_checkpoint(epoch)
 
+
 if __name__ == "__main__":
     runner = ExperimentRunner()
     runner.run()
-
