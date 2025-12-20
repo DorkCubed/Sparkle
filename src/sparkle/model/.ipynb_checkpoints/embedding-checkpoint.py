@@ -19,16 +19,10 @@ class PacketEmbedding(nn.Module):
         field_pos = field_pos[:, :min_len]
         header_pos = header_pos[:, :min_len]
 
-        # print("token ids :", token_ids.shape)
-        # print("TOKEEENN", token_ids.shape)
-        # token_ids = token_ids.squeeze(0)
-        # print("token ids :", token_ids.shape)
         num_packets, seq_len = token_ids.size()
 
         token_pos_ids = torch.arange(seq_len, device=token_ids.device).unsqueeze(0).expand(num_packets, -1)
         
-        # print(field_pos.shape)
-        # print(header_pos.shape)
         # token_pos = torch.tensor([i for i in range(num_packets)])
         # token_pos = torch.arange(seq_len, device=token_ids.device).unsqueeze(0).repeat(num_packets, 1)
         token_emb = self.token_embed(token_ids)
@@ -42,14 +36,6 @@ class PacketEmbedding(nn.Module):
         # print(field_pos_emb.shape)
         # print(header_pos_emb.shape)
         # embed_val = token_emb + token_pos_emb + field_pos_emb + header_pos_emb
-        print(token_emb)
-        print(token_emb.size())
-        print(token_pos_emb)
-        print(token_pos_emb.size())
-        print(field_pos_emb)
-        print(field_pos_emb.size())
-        print(header_pos_emb)
-        print(header_pos_emb.size())
         embed_val = self.drop(token_emb + token_pos_emb + field_pos_emb + header_pos_emb)
         # del token_emb, token_pos_emb, field_pos_emb, header_pos_emb
         # torch.cuda.empty_cache()
