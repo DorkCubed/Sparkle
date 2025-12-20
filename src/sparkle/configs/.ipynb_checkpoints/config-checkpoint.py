@@ -33,13 +33,13 @@ class Config:
         self.vocab_size = 262
         self.embed_dim = 256  # 768
         self.num_heads = 8  # 12
-        self.num_layers = 4  # 6
-        self.dropout = 0.2  # 0.1
+        self.num_layers = 2  # 6
+        self.dropout = 0.1  # 0.1
         self.max_flow_length = 512
         self.mask_prob = 0.15
         self.num_epochs = 1
         self.max_len = 578  # 512
-        self.chunk_size = 2 # earlier batch_size_1
+        self.chunk_size = 512 # earlier batch_size_1
         self.learning_rate = 0.001
 
     def initialize_data_fetcher(self):
