@@ -177,7 +177,7 @@ class PacketLevelTrainer:
 
                 if max_idx >= vocab_limit or min_idx < 0:
                     logger.error(
-                        f"❌ SKIPPING BATCH {i}: Found invalid index {max_idx} (Max allowed: {vocab_limit - 1}) in file {entry.get('packet')}")
+                        f"SKIPPING BATCH {i}: Found invalid index {max_idx} (Max allowed: {vocab_limit - 1}) in file {entry.get('packet')}")
                     self.skipped += 1
                     progress_bar.set_postfix({"skipped": self.skipped})
                     continue  # Skip safely, GPU is still healthy
