@@ -183,6 +183,7 @@ class PacketLevelTrainer:
                     continue  # Skip safely, GPU is still healthy
             except Exception as check_e:
                 logger.error(f"Error during index validation: {check_e}")
+                self.skipped += 1
                 continue
 
             try:
@@ -197,6 +198,7 @@ class PacketLevelTrainer:
                     continue
             except Exception as e:
                 logger.exception(f"Unexpected error inside batch {i}: {e}")
+                self.skipped += 1
                 continue
             # Handle file transitions safely
             try:
@@ -217,6 +219,7 @@ class PacketLevelTrainer:
                 self.previous_packet_file = current_packet_file
             except Exception as e:
                 logger.exception(f"Error during file-boundary logic: {e}")
+                self.skipped += 1
 
             try:
                 # Packet-level forward pass
