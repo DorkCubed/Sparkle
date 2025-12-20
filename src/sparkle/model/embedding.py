@@ -19,16 +19,10 @@ class PacketEmbedding(nn.Module):
         field_pos = field_pos[:, :min_len]
         header_pos = header_pos[:, :min_len]
 
-        # print("token ids :", token_ids.shape)
-        # print("TOKEEENN", token_ids.shape)
-        # token_ids = token_ids.squeeze(0)
-        # print("token ids :", token_ids.shape)
         num_packets, seq_len = token_ids.size()
 
         token_pos_ids = torch.arange(seq_len, device=token_ids.device).unsqueeze(0).expand(num_packets, -1)
         
-        # print(field_pos.shape)
-        # print(header_pos.shape)
         # token_pos = torch.tensor([i for i in range(num_packets)])
         # token_pos = torch.arange(seq_len, device=token_ids.device).unsqueeze(0).repeat(num_packets, 1)
         token_emb = self.token_embed(token_ids)

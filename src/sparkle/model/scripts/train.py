@@ -218,20 +218,24 @@ class PacketLevelTrainer:
             except Exception as e:
                 logger.exception(f"Error during file-boundary logic: {e}")
 
-            # Packet-level forward pass
-            mlm_loss, sfbo_loss, encoded_packets_mean = self.packet_encoder(
-                packet_sequences, field_pos=field_position, header_pos=header_position
-            )
+            try:
+                # Packet-level forward pass
+                mlm_loss, sfbo_loss, encoded_packets_mean = self.packet_encoder(
+                    packet_sequences, field_pos=field_position, header_pos=header_position
+                )
 
-            self.accumulated_mlm_loss += mlm_loss
-            self.accumulated_sfbo_loss += sfbo_loss
-            self.batch_counter += 1
+                self.accumulated_mlm_loss += mlm_loss
+                self.accumulated_sfbo_loss += sfbo_loss
+                self.batch_counter += 1
 
-            if self.batch_counter == self.accumulation_steps:
-                self.backward_and_optimize(self.accumulated_mlm_loss, self.accumulated_sfbo_loss)
+                if self.batch_counter == self.accumulation_steps:
+                    self.backward_and_optimize(self.accumulated_mlm_loss, self.accumulated_sfbo_loss)
 
-            self.all_packet_encodings.append(encoded_packets_mean.detach())
-            self.step_successful = True
+                self.all_packet_encodings.append(encoded_packets_mean.detach())
+                self.step_successful = True
+            except Exception as e:
+                logger.exception(f"Loss accumulation error inside batch {i}: {e}")
+                self.skipped += 1
 
             self.previous_entry = entry
 
