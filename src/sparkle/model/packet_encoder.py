@@ -37,37 +37,49 @@ class PacketLevelEncoder(nn.Module):
         #     nn.Linear(embed_dim, vocab_size)
         # )
     def forward(self, packet_sequences, field_pos, header_pos):
-
-        # splits the seq into masked seqs
-        # packet_sequences = packet_sequences.squeeze(0)
-        # print("packet: ", packet_sequences.shape)
-        # packet_sequences = packet_sequences.float()
         device = packet_sequences.device
+
+        min_batch = min(packet_sequences.size(0), field_pos.size(0), header_pos.size(0))
+
+        packet_sequences = packet_sequences[:min_batch]
+        field_pos = field_pos[:min_batch]
+        header_pos = header_pos[:min_batch]
+
         masked_packets, span_masks = apply_mlm_sfbo_masking(packet_sequences, field_pos)
-        # print("masked: ", masked_packets.device, span_masks.device)
-        # masked_packets = masked_packets.long() # can we change the long to float here? 
+
+        masked_packets = masked_packets.to(device)
+        span_masks = span_masks.to(device)
+
+        min_seq_len = min(masked_packets.size(1), field_pos.size(1), header_pos.size(1))
+        masked_packets = masked_packets[:, :min_seq_len]
+        span_masks = span_masks[:, :min_seq_len]
+        field_pos = field_pos[:, :min_seq_len]
+        header_pos = header_pos[:, :min_seq_len]
+
+        packet_sequences_aligned = packet_sequences[:, :min_seq_len]
+
+        embedded_packets = self.embedding(masked_packets, field_pos, header_pos).squeeze(0)
+        # masked_packets = masked_packets.long() # can we change the long to float here?
         # mask_packet_embeddings = self.embedding(masked_packets, field_pos, header_pos)
-        # print(mask_packet_embeddings.shape)
         # masked_packets_val, token_emb, token_pos_emb, field_pos_emb, header_pos_emb = self.embedding(masked_packets.to(device))
         # mask_encoded_packets = self.encoder(masked_packets_val, field_pos, header_pos).squeeze(0)
-        mask_encoded_packets = self.encoder(self.embedding(masked_packets.to(device), field_pos, header_pos).squeeze(0))
 
+        mask_encoded_packets = self.encoder(embedded_packets)
+
+        span_embedded = self.embedding(span_masks, field_pos, header_pos)
         # span_masks = span_masks.long()
         # span_packet_embeddings = self.embedding(span_masks, field_pos, header_pos)
         # span_packets_val, token_emb, token_pos_emb, field_pos_emb, header_pos_emb = self.embedding(span_masks.to(device))
         # span_encoded_packets = self.encoder(span_packets_val, field_pos, header_pos).squeeze(0)
 
-        span_encoded_packets = self.encoder(self.embedding(span_masks.to(device), field_pos, header_pos).squeeze(0))
+        span_encoded_packets = self.encoder(span_embedded.squeeze(0))
         mlm_loss = self.compute_mlm_loss(mask_encoded_packets, masked_packets.to(device))
-        sfbo_loss = self.compute_sfbo_loss(span_encoded_packets, span_masks.to(device), packet_sequences)
-        # stack_encoded_packets = torch.stack((mask_encoded_packets, span_encoded_packets))
+        sfbo_loss = self.compute_sfbo_loss(span_encoded_packets, span_masks.to(device), packet_sequences_aligned.to(device))
+
         mean_encoded_packets = torch.mean(torch.stack((mask_encoded_packets, span_encoded_packets)), dim=0)
-        # print("packet enc devices: ", mlm_loss.device, sfbo_loss.device, mask_encoded_packets.device,
-        #       masked_packets.device, mean_encoded_packets.device)
-        # del masked_packets, span_masks
-        # torch.cuda.empty_cache()
+
         return mlm_loss, sfbo_loss, mean_encoded_packets
-    
+
     # def forward(self, packet_sequences, field_pos, header_pos):
 
     #     # splits the seq into masked seqs
