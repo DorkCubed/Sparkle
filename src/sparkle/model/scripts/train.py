@@ -123,6 +123,7 @@ class PacketLevelTrainer:
                     direction_data = [int(line.strip()) for line in file.readlines()]
             except Exception as e:
                 logger.exception(f"Failed reading direction file {direction_file_path}: {e}")
+                self.skipped += 1
                 return None
 
             try:
