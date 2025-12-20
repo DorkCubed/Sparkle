@@ -70,6 +70,31 @@ class PacketLevelTrainer:
 
         return vocab
 
+    @staticmethod
+    def safe_prepare(tensor, name, device):
+        if tensor is None:
+            raise ValueError(f"{name} is None")
+
+        if not hasattr(tensor, "to"):
+            raise TypeError(f"{name} is not a tensor-like object")
+
+        if tensor.dim() > 1 and tensor.size(0) == 1:
+            tensor = tensor[0]
+
+        try:
+            tensor = tensor.squeeze(0)
+        except Exception as e:
+            raise RuntimeError(f"Failed to squeeze {name}: {e}") from e
+
+        try:
+            tensor = tensor.to(device)
+        except Exception as e:
+            raise RuntimeError(f"Failed to move {name} to device {device}: {e}") from e
+
+        return tensor
+
+
+
     # TODO (done): fix this to be compatible with manifest.json logic
     # TODO (test)
     def process_encodings(self, encodings, entry):
@@ -188,9 +213,9 @@ class PacketLevelTrainer:
 
             try:
                 entry = {k: (v[0] if isinstance(v, list) else v) for k, v in entry.items()}
-                packet_sequences = packet_sequences.squeeze(0).to(self.device)
-                field_position = field_position.squeeze(0).to(self.device)
-                header_position = header_position.squeeze(0).to(self.device)
+                packet_sequences = self.safe_prepare(packet_sequences, "packet_sequences", self.device)
+                field_position = self.safe_prepare(field_position, "field_position", self.device)
+                header_position = self.safe_prepare(header_position, "header_position", self.device)
 
                 current_packet_file = entry.get("packet")
                 if current_packet_file is None:
