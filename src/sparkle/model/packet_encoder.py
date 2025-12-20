@@ -109,7 +109,7 @@ class PacketLevelEncoder(nn.Module):
         # print("mlm logits: ", mlm_logits.shape)
         # print(mlm_logits.view(-1, mlm_logits.size(-1)).shape, (masked_packets.view(-1)).shape)
         mlm_loss = F.cross_entropy(
-            mlm_logits.view(-1, mlm_logits.size(-1)), masked_packets.view(-1))
+            mlm_logits.reshape(-1, mlm_logits.size(-1)), masked_packets.reshape(-1))
         return mlm_loss
 
     def compute_sfbo_loss(self, span_encoded_packets, span_masks, packet_sequences):
