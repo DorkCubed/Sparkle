@@ -25,7 +25,7 @@ class Tokenizer:
 
             # Validate hex dump
             if not cleaned or not hex_pattern.match(cleaned):
-                print(f"Invalid hex dump skipped: {repr(hex_dump)}")
+                # print(f"Invalid hex dump skipped: {repr(hex_dump)}")
                 # Represent this line as a single error token rather than dropping it
                 tokens = ['[CLSp]', '[BADHEX]', '[SEP]']
                 all_tokens.append(tokens)

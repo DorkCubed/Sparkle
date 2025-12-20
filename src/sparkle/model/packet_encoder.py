@@ -116,9 +116,9 @@ class PacketLevelEncoder(nn.Module):
         sfbo_loss = 0
         sfbo_logits = self.sfbo_predictor(span_encoded_packets)
         # print("sfbo log: ", sfbo_logits.shape)
-        flat_logits = sfbo_logits.view(-1, sfbo_logits.size(-1))
+        flat_logits = sfbo_logits.reshape(-1, sfbo_logits.size(-1))
         # print("flat logits: ", flat_logits.shape)
-        flat_targets = span_masks.view(-1) 
+        flat_targets = span_masks.reshape(-1)
         sfbo_loss += F.cross_entropy(flat_logits, flat_targets)
 
         return sfbo_loss
