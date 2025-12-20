@@ -36,14 +36,6 @@ class PacketEmbedding(nn.Module):
         # print(field_pos_emb.shape)
         # print(header_pos_emb.shape)
         # embed_val = token_emb + token_pos_emb + field_pos_emb + header_pos_emb
-        print(token_emb)
-        print(token_emb.size())
-        print(token_pos_emb)
-        print(token_pos_emb.size())
-        print(field_pos_emb)
-        print(field_pos_emb.size())
-        print(header_pos_emb)
-        print(header_pos_emb.size())
         embed_val = self.drop(token_emb + token_pos_emb + field_pos_emb + header_pos_emb)
         # del token_emb, token_pos_emb, field_pos_emb, header_pos_emb
         # torch.cuda.empty_cache()

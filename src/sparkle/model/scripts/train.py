@@ -2,6 +2,9 @@ import logging
 import os
 from datetime import datetime
 
+os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+os.environ["TORCH_USE_CUDA_DSA"] = "1"
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -92,6 +95,13 @@ class PacketLevelTrainer:
             raise RuntimeError(f"Failed to move {name} to device {device}: {e}") from e
 
         return tensor
+
+    @staticmethod
+    def validate_indices(tensors, names, limits):
+        for t, name, limit in zip(tensors, names, limits):
+            if t.min() < 0 or t.max() >= limit:
+                raise ValueError(f"{name} index out of bounds: min={t.min()}, max={t.max()}, limit={limit}")
+
 
 
 
@@ -211,6 +221,7 @@ class PacketLevelTrainer:
                 logger.error(f"Error during index validation: {check_e}")
                 self.skipped += 1
                 continue
+
 
             try:
                 entry = {k: (v[0] if isinstance(v, list) else v) for k, v in entry.items()}
@@ -341,10 +352,10 @@ class ExperimentRunner:
         return vocab
 
     def run(self):
-        # print("-" * 30)
-        # print(f"CUDA_LAUNCH_BLOCKING: {os.environ.get('CUDA_LAUNCH_BLOCKING', 'Not Set')}")
-        # print(f"TORCH_USE_CUDA_DSA:   {os.environ.get('TORCH_USE_CUDA_DSA', 'Not Set')}")
-        # print("-" * 30)
+        print("-" * 30)
+        print(f"CUDA_LAUNCH_BLOCKING: {os.environ.get('CUDA_LAUNCH_BLOCKING', 'Not Set')}")
+        print(f"TORCH_USE_CUDA_DSA:   {os.environ.get('TORCH_USE_CUDA_DSA', 'Not Set')}")
+        print("-" * 30)
 
         logger.info("Starting model training...")
         vocab = self.load_vocab()
