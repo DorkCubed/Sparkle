@@ -156,6 +156,35 @@ class PacketLevelTrainer:
         )
 
         for i, (packet_sequences, field_position, header_position, entry) in enumerate(progress_bar):
+            # try:
+            #     entry = {k: (v[0] if isinstance(v, list) else v) for k, v in entry.items()}
+            #     packet_sequences = packet_sequences.squeeze(0).to(self.device)
+            #     field_position = field_position.squeeze(0).to(self.device)
+            #     header_position = header_position.squeeze(0).to(self.device)
+            #
+            #     current_packet_file = entry.get("packet")
+            #     if current_packet_file is None:
+            #         logger.error("Missing required entry['packet'] in batch, skipping.")
+            #         continue
+            # except Exception as e:
+            #     logger.exception(f"Unexpected error inside batch {i}: {e}")
+            #     continue
+
+            try:
+                vocab_limit = self.config.vocab_size
+                max_idx = packet_sequences.max().item()
+                min_idx = packet_sequences.min().item()
+
+                if max_idx >= vocab_limit or min_idx < 0:
+                    logger.error(
+                        f"SKIPPING BATCH {i}: Found invalid index {max_idx} (Max allowed: {vocab_limit - 1}) in file {entry.get('packet')}")
+                    self.skipped += 1
+                    progress_bar.set_postfix({"skipped": self.skipped})
+                    continue  # Skip safely, GPU is still healthy
+            except Exception as check_e:
+                logger.error(f"Error during index validation: {check_e}")
+                continue
+
             try:
                 entry = {k: (v[0] if isinstance(v, list) else v) for k, v in entry.items()}
                 packet_sequences = packet_sequences.squeeze(0).to(self.device)
@@ -190,23 +219,19 @@ class PacketLevelTrainer:
                 logger.exception(f"Error during file-boundary logic: {e}")
 
             # Packet-level forward pass
-            try:
-                mlm_loss, sfbo_loss, encoded_packets_mean = self.packet_encoder(
-                    packet_sequences, field_pos=field_position, header_pos=header_position
-                )
+            mlm_loss, sfbo_loss, encoded_packets_mean = self.packet_encoder(
+                packet_sequences, field_pos=field_position, header_pos=header_position
+            )
 
-                self.accumulated_mlm_loss += mlm_loss
-                self.accumulated_sfbo_loss += sfbo_loss
-                self.batch_counter += 1
+            self.accumulated_mlm_loss += mlm_loss
+            self.accumulated_sfbo_loss += sfbo_loss
+            self.batch_counter += 1
 
-                if self.batch_counter == self.accumulation_steps:
-                    self.backward_and_optimize(self.accumulated_mlm_loss, self.accumulated_sfbo_loss)
+            if self.batch_counter == self.accumulation_steps:
+                self.backward_and_optimize(self.accumulated_mlm_loss, self.accumulated_sfbo_loss)
 
-                self.all_packet_encodings.append(encoded_packets_mean.detach())
-                self.step_successful = True
-            except Exception as e:
-                logger.exception(f"Loss accumulation error in batch {i}: {e}")
-                self.skipped += 1
+            self.all_packet_encodings.append(encoded_packets_mean.detach())
+            self.step_successful = True
 
             self.previous_entry = entry
 
@@ -283,13 +308,11 @@ class ExperimentRunner:
         return vocab
 
     def run(self):
-        os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
-        os.environ['TORCH_USE_CUDA_DSA'] = "1"
-        
-        print("-" * 30)
-        print(f"CUDA_LAUNCH_BLOCKING: {os.environ.get('CUDA_LAUNCH_BLOCKING', 'Not Set')}")
-        print(f"TORCH_USE_CUDA_DSA:   {os.environ.get('TORCH_USE_CUDA_DSA', 'Not Set')}")
-        print("-" * 30)
+        # print("-" * 30)
+        # print(f"CUDA_LAUNCH_BLOCKING: {os.environ.get('CUDA_LAUNCH_BLOCKING', 'Not Set')}")
+        # print(f"TORCH_USE_CUDA_DSA:   {os.environ.get('TORCH_USE_CUDA_DSA', 'Not Set')}")
+        # print("-" * 30)
+
         logger.info("Starting model training...")
         vocab = self.load_vocab()
         logger.info(f"Vocabulary size: {len(vocab)}")
