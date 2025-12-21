@@ -13,7 +13,7 @@ from typing import Tuple
 config = Config()
 INPUT_MANIFEST = config.manifest_path
 project_root = get_project_root()
-OUTPUT_MANIFEST = os.path.join(project_root, "manifest", "local_manifest.json")
+OUTPUT_MANIFEST = os.path.join(project_root, "manifest", "local_manifest_5000.json")
 
 LOCAL_BASE = os.path.join(os.path.dirname(project_root), "sparkle-datavol", "local")
 
