@@ -192,6 +192,9 @@ class PacketLevelTrainer:
         )
 
         for i, (packet_sequences, field_position, header_position, entry) in enumerate(progress_bar):
+            print("Emptying cache")
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
             # try:
             #     entry = {k: (v[0] if isinstance(v, list) else v) for k, v in entry.items()}
             #     packet_sequences = packet_sequences.squeeze(0).to(self.device)
@@ -256,7 +259,10 @@ class PacketLevelTrainer:
                 self.previous_packet_file = current_packet_file
             except Exception as e:
                 logger.exception(f"Error during file-boundary logic: {e}")
+                self.all_packet_encodings = []
+                self.total_packet_enc_loss = 0
                 self.skipped += 1
+                
 
             try:
                 # Packet-level forward pass
@@ -276,8 +282,11 @@ class PacketLevelTrainer:
             except Exception as e:
                 logger.exception(f"Loss accumulation error inside batch {i}: {e}")
                 self.skipped += 1
+                continue
+                
 
             self.previous_entry = entry
+
 
             progress_bar.set_postfix({
                 "skipped": self.skipped
