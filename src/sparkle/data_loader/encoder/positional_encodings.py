@@ -16,18 +16,28 @@ def field_pos(filename, start_idx, end_idx):
         with open(filename, "r") as file:
             lines = file.readlines()
     except FileNotFoundError:
-        print(f"Error 2: {filename} (field) not found.")
-        exit()
+        raise FileNotFoundError(f"File {filename} (field) not found.")
 
-    len_list = []
-    for line in lines:
-        indices = parse_line_to_list(line)
-        len_list.append(indices)
+    n = len(lines)
+    if start_idx >= n:
+        raise IndexError(
+            f"start_idx out of range: start={start_idx}, lines={n}, file={filename}"
+        )
 
-    token_field_pos_emb_list = [parse_line_to_list(lines[i]) for i in range(start_idx, end_idx)]
-    max_len = max(len(seq) for seq in len_list) + 2
+    n = min(end_idx, n)
+
+    parsed_lines = [parse_line_to_list(line) for line in lines]
+
+    token_field_pos_emb_list = parsed_lines[start_idx:end_idx]
+
+    if not token_field_pos_emb_list:
+        raise ValueError(
+            f"Empty chunk: start={start_idx}, end={end_idx}, lines={n}, file={filename}"
+        )
+
+    max_len = max(len(seq) for seq in parsed_lines) + 2
     padded_sequences = pad_sequences(token_field_pos_emb_list, max_len)
-    
+
     return torch.tensor(padded_sequences, dtype=torch.long)
 
 def header_pos(filename, start_idx, end_idx):
