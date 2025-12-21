@@ -2,6 +2,7 @@ import logging
 import os
 from datetime import datetime
 
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 os.environ["TORCH_USE_CUDA_DSA"] = "1"
 
@@ -73,12 +74,13 @@ class PacketLevelTrainer:
 
         return vocab
 
-    @staticmethod
-    def safe_prepare(tensor, name, device):
+    def safe_prepare(self, tensor, name, device):
         if tensor is None:
+            self.skipped += 1
             raise ValueError(f"{name} is None")
 
         if not hasattr(tensor, "to"):
+            self.skipped += 1
             raise TypeError(f"{name} is not a tensor-like object")
 
         if tensor.dim() > 1 and tensor.size(0) == 1:
@@ -87,11 +89,13 @@ class PacketLevelTrainer:
         try:
             tensor = tensor.squeeze(0)
         except Exception as e:
+            self.skipped += 1
             raise RuntimeError(f"Failed to squeeze {name}: {e}") from e
 
         try:
             tensor = tensor.to(device)
         except Exception as e:
+            self.skipped += 1
             raise RuntimeError(f"Failed to move {name} to device {device}: {e}") from e
 
         return tensor

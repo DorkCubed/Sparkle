@@ -2,6 +2,7 @@ import logging
 import os
 from datetime import datetime
 
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 os.environ["TORCH_USE_CUDA_DSA"] = "1"
 
@@ -73,12 +74,13 @@ class PacketLevelTrainer:
 
         return vocab
 
-    @staticmethod
-    def safe_prepare(tensor, name, device):
+    def safe_prepare(self, tensor, name, device):
         if tensor is None:
+            self.skipped += 1
             raise ValueError(f"{name} is None")
 
         if not hasattr(tensor, "to"):
+            self.skipped += 1
             raise TypeError(f"{name} is not a tensor-like object")
 
         if tensor.dim() > 1 and tensor.size(0) == 1:
@@ -87,11 +89,13 @@ class PacketLevelTrainer:
         try:
             tensor = tensor.squeeze(0)
         except Exception as e:
+            self.skipped += 1
             raise RuntimeError(f"Failed to squeeze {name}: {e}") from e
 
         try:
             tensor = tensor.to(device)
         except Exception as e:
+            self.skipped += 1
             raise RuntimeError(f"Failed to move {name} to device {device}: {e}") from e
 
         return tensor
@@ -102,8 +106,9 @@ class PacketLevelTrainer:
             if t.min() < 0 or t.max() >= limit:
                 raise ValueError(f"{name} index out of bounds: min={t.min()}, max={t.max()}, limit={limit}")
 
-
-
+    @staticmethod
+    def is_cuda_oom(e: Exception) -> bool:
+        return isinstance(e, RuntimeError) and "out of memory" in str(e).lower()
 
     # TODO (done): fix this to be compatible with manifest.json logic
     # TODO (test)
@@ -132,7 +137,7 @@ class PacketLevelTrainer:
                 with open(direction_file_path, 'r', encoding="utf-8") as file:
                     direction_data = [int(line.strip()) for line in file.readlines()]
             except Exception as e:
-                logger.exception(f"Failed reading direction file {direction_file_path}: {e}")
+                # logger.exception(f"Failed reading direction file {direction_file_path}: {e}")
                 self.skipped += 1
                 return None
 
@@ -192,9 +197,6 @@ class PacketLevelTrainer:
         )
 
         for i, (packet_sequences, field_position, header_position, entry) in enumerate(progress_bar):
-            print("Emptying cache")
-            torch.cuda.empty_cache()
-            torch.cuda.ipc_collect()
             # try:
             #     entry = {k: (v[0] if isinstance(v, list) else v) for k, v in entry.items()}
             #     packet_sequences = packet_sequences.squeeze(0).to(self.device)
@@ -240,6 +242,7 @@ class PacketLevelTrainer:
                 logger.exception(f"Unexpected error inside batch {i}: {e}")
                 self.skipped += 1
                 continue
+
             # Handle file transitions safely
             try:
                 if self.previous_entry is not None and current_packet_file != self.previous_packet_file:
@@ -280,8 +283,22 @@ class PacketLevelTrainer:
                 self.all_packet_encodings.append(encoded_packets_mean.detach())
                 self.step_successful = True
             except Exception as e:
-                logger.exception(f"Loss accumulation error inside batch {i}: {e}")
-                self.skipped += 1
+                if self.is_cuda_oom(e):
+                    logger.error(f"CUDA OOM at batch {i}, skipping batch")
+
+                    # critical cleanup
+                    self.optimizer.zero_grad(set_to_none=True)
+                    torch.cuda.empty_cache()
+                    torch.cuda.ipc_collect()
+
+                    # reset accumulation safely
+                    self.accumulated_mlm_loss = 0
+                    self.accumulated_sfbo_loss = 0
+                    self.batch_counter = 0
+                    self.all_packet_encodings = []
+
+                    self.skipped += 1
+                    continue
                 continue
                 
 
