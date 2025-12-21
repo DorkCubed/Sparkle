@@ -24,8 +24,8 @@ class Config:
         # self.manifest_path = os.path.join(project_root, "manifest", "manifest_1000.json")
         # self.manifest_path = os.path.join(project_root, "manifest", "manifest_10.json")
         # self.manifest_path = os.path.join(project_root, "manifest", "manifest_100.json")
-        # self.manifest_path = os.path.join(project_root, "manifest", "local_manifest_10.json")
-        self.manifest_path = os.path.join(project_root, "manifest", "local_manifest.json")
+        self.manifest_path = os.path.join(project_root, "manifest", "local_manifest_10.json")
+        # self.manifest_path = os.path.join(project_root, "manifest", "local_manifest.json")
         # self.manifest_path = os.path.join(project_root, "manifest", "local_manifest_54.json")
         self.batch_size = 1
         self.shuffle = False
