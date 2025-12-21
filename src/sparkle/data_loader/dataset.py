@@ -5,7 +5,7 @@ from s3fs import S3FileSystem
 from torch.utils.data import Dataset
 
 from sparkle.configs.config import Config
-from sparkle.data_loader.encoder.positional_encodings import field_pos, header_pos
+from sparkle.data_loader.encoder.positional_encodings import field_pos_safe, header_pos_safe
 
 
 class PacketSequenceDataset(Dataset):
@@ -75,7 +75,7 @@ class PacketSequenceDataset(Dataset):
         chunk_end = min((line_idx + 1) * self.chunk_size, token_ids.size(0))
         chunk = token_ids[chunk_start:chunk_end]
 
-        field_position = field_pos(field_path, chunk_start, chunk_end)
-        header_position = header_pos(header_path, chunk_start, chunk_end)
+        field_position = field_pos_safe(field_path, chunk_start, chunk_end)
+        header_position = header_pos_safe(header_path, chunk_start, chunk_end)
 
         return chunk, field_position, header_position, entry
