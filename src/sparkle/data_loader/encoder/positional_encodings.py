@@ -11,41 +11,6 @@ def pad_sequences(sequences, max_len, padding_value=0):
         padded_sequences.append(seq)
     return padded_sequences
 
-# def field_pos(filename, start_idx, end_idx):
-#     try:
-#         with open(filename, "r") as file:
-#             lines = file.readlines()
-#     except FileNotFoundError:
-#         raise FileNotFoundError(f"File {filename} (field) not found.")
-#
-#     n = len(lines)
-#     if start_idx >= n:
-#         raise IndexError(
-#             f"start_idx out of range: start={start_idx}, lines={n}, file={filename}"
-#         )
-#
-#     n = min(end_idx, n)
-#
-#     parsed_lines = [parse_line_to_list(line) for line in lines]
-#
-#     token_field_pos_emb_list = parsed_lines[start_idx:end_idx]
-#
-#     if not token_field_pos_emb_list:
-#         raise ValueError(
-#             f"Empty chunk: start={start_idx}, end={end_idx}, lines={n}, file={filename}"
-#         )
-#
-#     max_len = max(len(seq) for seq in parsed_lines) + 2
-#     padded_sequences = pad_sequences(token_field_pos_emb_list, max_len)
-#
-#     return torch.tensor(padded_sequences, dtype=torch.long)
-#
-# def field_pos_safe(filename, start_idx, end_idx):
-#     try:
-#         return field_pos(filename, start_idx, end_idx)
-#     except IndexError:
-#         # return a zero-length or padded tensor
-#         return torch.zeros((1, 1), dtype=torch.long)
 
 def field_pos_safe(filename, start_idx, end_idx, device='cpu'):
     """
