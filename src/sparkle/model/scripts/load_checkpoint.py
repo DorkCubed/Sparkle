@@ -36,5 +36,5 @@ def load_losses(checkpoint_path):
     return mlm_loss, sfbo_loss
 
 
-path = os.path.join(project_root, "src", "checkpoints", "checkpoint_1.pth")
+path = os.path.join(project_root, "src", "checkpoints", "checkpoint_1_5k.pth")
 load_losses(path)
