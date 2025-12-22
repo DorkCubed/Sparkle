@@ -28,6 +28,7 @@ class Config:
         # self.manifest_path = os.path.join(project_root, "manifest", "local_manifest_5000.json")
         # self.manifest_path = os.path.join(project_root, "manifest", "local_manifest.json")
         # self.manifest_path = os.path.join(project_root, "manifest", "manifest_5000.json")
+        # self.manifest_path = os.path.join(project_root, "manifest", "local_manifest.json")
         self.manifest_path = os.path.join(project_root, "manifest", "local_manifest.json")
         # self.manifest_path = os.path.join(project_root, "manifest", "local_manifest_54.json")
         self.batch_size = 1
