@@ -78,4 +78,12 @@ class PacketSequenceDataset(Dataset):
         field_position = field_pos_safe(field_path, chunk_start, chunk_end)
         header_position = header_pos_safe(header_path, chunk_start, chunk_end)
 
+        max_model_len = self.config.max_len
+
+        if chunk.size(1) > max_model_len:
+            chunk = chunk[:, :max_model_len]
+
+            field_position = field_position[:, :max_model_len]
+            header_position = header_position[:, :max_model_len]
+
         return chunk, field_position, header_position, entry
