@@ -2,6 +2,10 @@ import logging
 import os
 from datetime import datetime
 
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""
+# os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+# os.environ["TORCH_USE_CUDA_DSA"] = "1"
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
