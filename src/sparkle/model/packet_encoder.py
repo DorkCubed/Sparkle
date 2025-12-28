@@ -39,54 +39,16 @@ class PacketLevelEncoder(nn.Module):
 
     def forward(self, packet_sequences, field_pos, header_pos):
         device = packet_sequences.device
-
-        # Determine maximum batch size and pad if needed
-        max_batch = max(packet_sequences.size(0), field_pos.size(0), header_pos.size(0))
-
-        def pad_batch(tensor, length):
-            pad_size = length - tensor.size(0)
-            if pad_size > 0:
-                # Pad on the batch dimension (dim=0)
-                tensor = F.pad(tensor, (0, 0, 0, pad_size), value=0)
-            return tensor
-
-        packet_sequences = pad_batch(packet_sequences, max_batch)
-        field_pos = pad_batch(field_pos, max_batch)
-        header_pos = pad_batch(header_pos, max_batch)
-
         masked_packets, span_masks = apply_mlm_sfbo_masking(packet_sequences, field_pos)
-
-        masked_packets = masked_packets.to(device)
-        span_masks = span_masks.to(device)
-
-        # Determine maximum sequence length and pad
-        max_seq_len = max(masked_packets.size(1), field_pos.size(1), header_pos.size(1))
-
-        def pad_seq(tensor, length):
-            pad_size = length - tensor.size(1)
-            if pad_size > 0:
-                # Pad on the sequence dimension (dim=1)
-                tensor = F.pad(tensor, (0, pad_size), value=0)
-            return tensor
-
-        masked_packets = pad_seq(masked_packets, max_seq_len)
-        span_masks = pad_seq(span_masks, max_seq_len)
-        field_pos = pad_seq(field_pos, max_seq_len)
-        header_pos = pad_seq(header_pos, max_seq_len)
-        packet_sequences_aligned = pad_seq(packet_sequences, max_seq_len)
-
-        embedded_packets = self.embedding(masked_packets, field_pos, header_pos).squeeze(0)
-        mask_encoded_packets = self.encoder(embedded_packets)
-
-        span_embedded = self.embedding(span_masks, field_pos, header_pos)
-        span_encoded_packets = self.encoder(span_embedded.squeeze(0))
+        mask_encoded_packets = self.encoder(self.embedding(masked_packets.to(device), field_pos, header_pos).squeeze(0))
+        span_encoded_packets = self.encoder(self.embedding(span_masks.to(device), field_pos, header_pos).squeeze(0))
 
         mlm_loss = self.compute_mlm_loss(mask_encoded_packets, masked_packets.to(device))
-        sfbo_loss = self.compute_sfbo_loss(span_encoded_packets, span_masks.to(device),
-                                           packet_sequences_aligned.to(device))
-
+        sfbo_loss = self.compute_sfbo_loss(span_encoded_packets, span_masks.to(device), packet_sequences)
+        # stack_encoded_packets = torch.stack((mask_encoded_packets, span_encoded_packets))
         mean_encoded_packets = torch.mean(torch.stack((mask_encoded_packets, span_encoded_packets)), dim=0)
 
+        torch.cuda.empty_cache()
         return mlm_loss, sfbo_loss, mean_encoded_packets
 
     # def forward(self, packet_sequences, field_pos, header_pos):
