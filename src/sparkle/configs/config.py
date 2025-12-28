@@ -28,8 +28,8 @@ class Config:
         # self.manifest_path = os.path.join(project_root, "manifest", "local_manifest_5000.json")
         # self.manifest_path = os.path.join(project_root, "manifest", "local_manifest.json")
         # self.manifest_path = os.path.join(project_root, "manifest", "manifest_5000.json")
-        # self.manifest_path = os.path.join(project_root, "manifest", "local_manifest.json")
-        self.manifest_path = os.path.join(project_root, "manifest", "local_manifest_10.json")
+        self.manifest_path = os.path.join(project_root, "manifest", "local_manifest.json")
+        # self.manifest_path = os.path.join(project_root, "manifest", "local_manifest_10.json")
         # self.manifest_path = os.path.join(project_root, "manifest", "local_manifest_54.json")
         self.batch_size = 1
         self.shuffle = False
@@ -43,7 +43,7 @@ class Config:
         self.mask_prob = 0.15
         self.num_epochs = 1
         self.max_len = 578  # 512
-        self.chunk_size = 32 # earlier batch_size_1
+        self.chunk_size = 4 # earlier batch_size_1
         self.learning_rate = 0.001
 
     def initialize_data_fetcher(self):
