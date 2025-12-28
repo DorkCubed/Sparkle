@@ -36,45 +36,54 @@ class PacketLevelEncoder(nn.Module):
         #     nn.ReLU(),
         #     nn.Linear(embed_dim, vocab_size)
         # )
+
     def forward(self, packet_sequences, field_pos, header_pos):
         device = packet_sequences.device
 
-        min_batch = min(packet_sequences.size(0), field_pos.size(0), header_pos.size(0))
+        # Determine maximum batch size and pad if needed
+        max_batch = max(packet_sequences.size(0), field_pos.size(0), header_pos.size(0))
 
-        packet_sequences = packet_sequences[:min_batch]
-        field_pos = field_pos[:min_batch]
-        header_pos = header_pos[:min_batch]
+        def pad_batch(tensor, length):
+            pad_size = length - tensor.size(0)
+            if pad_size > 0:
+                # Pad on the batch dimension (dim=0)
+                tensor = F.pad(tensor, (0, 0, 0, pad_size), value=0)
+            return tensor
+
+        packet_sequences = pad_batch(packet_sequences, max_batch)
+        field_pos = pad_batch(field_pos, max_batch)
+        header_pos = pad_batch(header_pos, max_batch)
 
         masked_packets, span_masks = apply_mlm_sfbo_masking(packet_sequences, field_pos)
 
         masked_packets = masked_packets.to(device)
         span_masks = span_masks.to(device)
 
-        min_seq_len = min(masked_packets.size(1), field_pos.size(1), header_pos.size(1))
-        masked_packets = masked_packets[:, :min_seq_len]
-        span_masks = span_masks[:, :min_seq_len]
-        field_pos = field_pos[:, :min_seq_len]
-        header_pos = header_pos[:, :min_seq_len]
+        # Determine maximum sequence length and pad
+        max_seq_len = max(masked_packets.size(1), field_pos.size(1), header_pos.size(1))
 
-        packet_sequences_aligned = packet_sequences[:, :min_seq_len]
+        def pad_seq(tensor, length):
+            pad_size = length - tensor.size(1)
+            if pad_size > 0:
+                # Pad on the sequence dimension (dim=1)
+                tensor = F.pad(tensor, (0, pad_size), value=0)
+            return tensor
+
+        masked_packets = pad_seq(masked_packets, max_seq_len)
+        span_masks = pad_seq(span_masks, max_seq_len)
+        field_pos = pad_seq(field_pos, max_seq_len)
+        header_pos = pad_seq(header_pos, max_seq_len)
+        packet_sequences_aligned = pad_seq(packet_sequences, max_seq_len)
 
         embedded_packets = self.embedding(masked_packets, field_pos, header_pos).squeeze(0)
-        # masked_packets = masked_packets.long() # can we change the long to float here?
-        # mask_packet_embeddings = self.embedding(masked_packets, field_pos, header_pos)
-        # masked_packets_val, token_emb, token_pos_emb, field_pos_emb, header_pos_emb = self.embedding(masked_packets.to(device))
-        # mask_encoded_packets = self.encoder(masked_packets_val, field_pos, header_pos).squeeze(0)
-
         mask_encoded_packets = self.encoder(embedded_packets)
 
         span_embedded = self.embedding(span_masks, field_pos, header_pos)
-        # span_masks = span_masks.long()
-        # span_packet_embeddings = self.embedding(span_masks, field_pos, header_pos)
-        # span_packets_val, token_emb, token_pos_emb, field_pos_emb, header_pos_emb = self.embedding(span_masks.to(device))
-        # span_encoded_packets = self.encoder(span_packets_val, field_pos, header_pos).squeeze(0)
-
         span_encoded_packets = self.encoder(span_embedded.squeeze(0))
+
         mlm_loss = self.compute_mlm_loss(mask_encoded_packets, masked_packets.to(device))
-        sfbo_loss = self.compute_sfbo_loss(span_encoded_packets, span_masks.to(device), packet_sequences_aligned.to(device))
+        sfbo_loss = self.compute_sfbo_loss(span_encoded_packets, span_masks.to(device),
+                                           packet_sequences_aligned.to(device))
 
         mean_encoded_packets = torch.mean(torch.stack((mask_encoded_packets, span_encoded_packets)), dim=0)
 
