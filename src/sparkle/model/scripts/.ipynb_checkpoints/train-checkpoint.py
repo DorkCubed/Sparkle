@@ -2,10 +2,6 @@ import logging
 import os
 from datetime import datetime
 
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
-os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
-os.environ["TORCH_USE_CUDA_DSA"] = "1"
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -280,7 +276,7 @@ class PacketLevelTrainer:
                 if self.batch_counter == self.accumulation_steps:
                     self.backward_and_optimize(self.accumulated_mlm_loss, self.accumulated_sfbo_loss)
 
-                self.all_packet_encodings.append(encoded_packets_mean.detach())
+                self.all_packet_encodings.append(encoded_packets_mean.detach().cpu())
                 self.step_successful = True
             except Exception as e:
                 if self.is_cuda_oom(e):
