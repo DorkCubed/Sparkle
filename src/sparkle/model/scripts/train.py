@@ -280,7 +280,7 @@ class PacketLevelTrainer:
                 if self.batch_counter == self.accumulation_steps:
                     self.backward_and_optimize(self.accumulated_mlm_loss, self.accumulated_sfbo_loss)
 
-                self.all_packet_encodings.append(encoded_packets_mean.detach())
+                self.all_packet_encodings.append(encoded_packets_mean.detach().cpu())
                 self.step_successful = True
             except Exception as e:
                 if self.is_cuda_oom(e):
