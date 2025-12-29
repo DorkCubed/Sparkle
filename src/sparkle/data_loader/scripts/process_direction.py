@@ -5,7 +5,7 @@ from sparkle.model.utils.direction_encoder import encode_file
 from sparkle.utils import get_project_root
 
 
-OUTPUT_MANIFEST = os.path.join(get_project_root(), "manifest", "local_manifest_5000.json")
+OUTPUT_MANIFEST = os.path.join(get_project_root(), "manifest", "local_manifest.json")
 
 def process_direction(output_manifest_path: str) -> None:
     with open(output_manifest_path, "r") as f:

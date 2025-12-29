@@ -6,7 +6,7 @@ from sparkle.utils import get_project_root
 config = Config()
 
 INPUT_MANIFEST = config.manifest_path      # your existing manifest
-OUTPUT_MANIFEST = os.path.join(get_project_root(), "manifest", "cleaned_local_manifest_54.json")
+OUTPUT_MANIFEST = os.path.join(get_project_root(), "manifest", "cleaned_local_manifest.json")
 
 def same_tail(*paths):
     tails = [os.path.basename(p) for p in paths]

@@ -13,7 +13,7 @@ from typing import Tuple
 config = Config()
 INPUT_MANIFEST = config.manifest_path
 project_root = get_project_root()
-OUTPUT_MANIFEST = os.path.join(project_root, "manifest", "local_manifest_5000.json")
+OUTPUT_MANIFEST = os.path.join(project_root, "manifest", "local_manifest.json")
 
 LOCAL_BASE = os.path.join(os.path.dirname(project_root), "sparkle-datavol", "local")
 
@@ -29,6 +29,7 @@ def download_s3_uri(uri: str, base: str) -> str:
     os.makedirs(os.path.dirname(local_path), exist_ok=True)
 
     fs.get(f"{bucket}/{key}", local_path)
+
     return local_path
 
 def _download_item_fields(item: dict, fields: list) -> dict:
