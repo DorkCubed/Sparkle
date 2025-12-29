@@ -51,8 +51,8 @@ class FlowLevelEncoder(nn.Module):
             fraction_encodings = []
             for fraction, pad_indices_fraction in zip(flow_fractions, pad_fractions):
                 # Move fraction and pad_indices_fraction to the same device
-                print(len(fraction))
-                print("paddings: ", len(pad_indices_fraction))
+                # print(len(fraction))
+                # print("paddings: ", len(pad_indices_fraction))
                 # fraction = fraction.to(device)
                 # pad_indices_fraction = pad_indices_fraction.to(device)
 
@@ -63,7 +63,7 @@ class FlowLevelEncoder(nn.Module):
                 masked_fraction = masked_fraction.to(device)  # Ensure masked_fraction is on the correct device
                 fraction_encoding = self.flow_encoder_block(masked_fraction)
                 # masked_fraction = masked_fraction.to(fraction.device)
-                print("device: ", fraction_encoding.device, fraction.device)
+                # print("device: ", fraction_encoding.device, fraction.device)
                 mpm_loss = self.calculate_mpm_loss(
                     fraction_encoding, fraction, mask_indices
                 )
@@ -85,14 +85,14 @@ class FlowLevelEncoder(nn.Module):
         similarity_matrix = self.mpm_similarity(fraction_encoding, original_fraction)
 
         # Print shape for debugging
-        print(f"Similarity Matrix Shape: {similarity_matrix.shape}")
+        # print(f"Similarity Matrix Shape: {similarity_matrix.shape}")
 
         # Check if similarity_matrix is empty or 1D
         if similarity_matrix.dim() == 0:
             print("Warning: Similarity matrix is empty.")
             return torch.tensor(0.0, device=similarity_matrix.device)  # Return a zero loss
         elif similarity_matrix.dim() == 1:
-            print("Warning: Similarity matrix is 1D, reshaping to 2D.")
+            # print("Warning: Similarity matrix is 1D, reshaping to 2D.")
             similarity_matrix = similarity_matrix.unsqueeze(0)  # Reshape to 2D
 
         # Generate targets
