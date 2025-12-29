@@ -119,9 +119,15 @@ class PacketLevelTrainer:
                 return None
 
             try:
-                final_packet_encodings = torch.cat(encodings, dim=0).to(self.device)
+                final_packet_encodings = torch.cat(encodings, dim=0)
+                final_packet_encodings = final_packet_encodings.to(self.device)
             except Exception as e:
-                logger.exception(f"Failed concatenating encodings: {e}")
+                if self.is_cuda_oom(e):
+                    logger.error("CUDA OOM while concatenating encodings")
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                else:
+                    logger.exception(f"Failed concatenating encodings: {e}")
                 return None
 
             direction_file_path = entry.get("direction")

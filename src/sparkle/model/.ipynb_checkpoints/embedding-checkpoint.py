@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 class PacketEmbedding(nn.Module):
     def __init__(self, vocab_size, max_len, embed_dim, dropout):
@@ -13,33 +14,30 @@ class PacketEmbedding(nn.Module):
         self.drop = nn.Dropout(dropout)
 
     def forward(self, token_ids, field_pos, header_pos):
-        min_len = min(token_ids.size(1), field_pos.size(1), header_pos.size(1))
+        max_len = max(token_ids.size(1), field_pos.size(1), header_pos.size(1))
 
-        token_ids = token_ids[:, :min_len]
-        field_pos = field_pos[:, :min_len]
-        header_pos = header_pos[:, :min_len]
+        def pad_to(tensor, length):
+            pad_size = length - tensor.size(1)
+            if pad_size > 0:
+                # Pad on the right (dim=1)
+                tensor = F.pad(tensor, (0, pad_size), value=0)  # value=0 or your pad token
+            return tensor
+
+        token_ids = pad_to(token_ids, max_len)
+        field_pos = pad_to(field_pos, max_len)
+        header_pos = pad_to(header_pos, max_len)
 
         num_packets, seq_len = token_ids.size()
 
         token_pos_ids = torch.arange(seq_len, device=token_ids.device).unsqueeze(0).expand(num_packets, -1)
         
-        # token_pos = torch.tensor([i for i in range(num_packets)])
-        # token_pos = torch.arange(seq_len, device=token_ids.device).unsqueeze(0).repeat(num_packets, 1)
         token_emb = self.token_embed(token_ids)
         token_pos_emb = self.token_pos_embed(token_pos_ids)
         field_pos_emb = self.field_pos_embed(field_pos)
         header_pos_emb = self.header_pos_embed(header_pos)
-        # print(token_emb.shape)
-        # print("device: ", token_emb.device, token_pos_emb.device, field_pos_emb.device, 
-        #       token_pos.device)
-        # print(token_pos_emb.shape)
-        # print(field_pos_emb.shape)
-        # print(header_pos_emb.shape)
-        # embed_val = token_emb + token_pos_emb + field_pos_emb + header_pos_emb
+
         embed_val = self.drop(token_emb + token_pos_emb + field_pos_emb + header_pos_emb)
-        # del token_emb, token_pos_emb, field_pos_emb, header_pos_emb
         # torch.cuda.empty_cache()
-        # return embed_val, token_emb, token_pos_emb, field_pos_emb, header_pos_emb
         return embed_val
     
 
