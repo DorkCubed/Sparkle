@@ -114,8 +114,6 @@ class PacketLevelTrainer:
     # TODO (test)
     def process_encodings(self, encodings, entry):
         try:
-            logger.info(f"Starting process encoding for {entry}")
-
             if not encodings:
                 logger.error("process_encodings called with empty encodings list.")
                 return None
@@ -125,8 +123,6 @@ class PacketLevelTrainer:
             except Exception as e:
                 logger.exception(f"Failed concatenating encodings: {e}")
                 return None
-
-            logger.info(f"Final concatenated shape: {final_packet_encodings.shape}")
 
             direction_file_path = entry.get("direction")
             if direction_file_path is None:
@@ -152,8 +148,6 @@ class PacketLevelTrainer:
             except Exception as e:
                 logger.exception(f"FlowEmbedding forward pass failed: {e}")
                 return None
-
-            logger.info(f"Flow embeddings computed for packet: {direction_file_path}")
 
             try:
                 flow_encoding, mpm_loss = self.flow_encoder(flow_embeddings, pad_indices)
@@ -247,7 +241,6 @@ class PacketLevelTrainer:
             try:
                 if self.previous_entry is not None and current_packet_file != self.previous_packet_file:
                     if self.all_packet_encodings:
-                        logger.info(f"Completed processing file: {self.previous_entry['packet']}")
                         mpm_loss = self.process_encodings(self.all_packet_encodings, self.previous_entry)
                         if mpm_loss is not None:
                             self.optimizer.zero_grad()
@@ -257,7 +250,6 @@ class PacketLevelTrainer:
                     # reset for new file
                     self.all_packet_encodings = []
                     self.total_packet_enc_loss = 0
-                    logger.info(f"Starting new file: {current_packet_file}")
 
                 self.previous_packet_file = current_packet_file
             except Exception as e:
@@ -309,13 +301,10 @@ class PacketLevelTrainer:
                 "skipped": self.skipped
             })
 
-        logger.info("Reached last file.")
-        logger.info(f"self.previous_entry: {self.previous_entry}")
 
         # Final file after loop
         try:
             if self.all_packet_encodings and self.previous_entry["packet"]:
-                logger.info(f"Final processing for last flow packet {self.previous_packet_file}")
                 final_loss = self.process_encodings(self.all_packet_encodings, self.previous_entry)
                 if final_loss is not None:
                     self.optimizer.zero_grad()
@@ -387,22 +376,16 @@ class ExperimentRunner:
         vocab = self.load_vocab()
         logger.info(f"Vocabulary size: {len(vocab)}")
 
-        # print("Loading embeddings.")
         packet_embedding = PacketEmbedding(self.config.vocab_size, max_len=self.config.max_len,
                                            embed_dim=self.config.embed_dim, dropout=self.config.dropout).to(self.device)
-        # print("Loaded packet embeddings.")
         packet_encoder = PacketLevelEncoder(self.config.vocab_size, self.config.embed_dim, self.config.max_len,
                                             self.config.num_heads, self.config.num_layers, self.config.dropout).to(
             self.device)
-        # print("Loaded packet encoder.")
         flow_embedding = FlowEmbedding(self.config.embed_dim, self.config.max_flow_length, self.config.dropout,
                                        vocab).to(self.device)
-        # print("Loaded flow embeddings.")
         flow_encoder = FlowLevelEncoder(self.config.embed_dim, self.config.num_layers, self.config.num_heads,
                                         self.config.dropout, vocab, self.config.max_flow_length,
                                         self.config.mask_prob).to(self.device)
-        # print("Loaded flow encoder.")
-        # print("Loaded embeddings.")
 
         trainer = PacketLevelTrainer(packet_embedding, packet_encoder, flow_embedding, flow_encoder)
 
