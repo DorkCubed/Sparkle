@@ -65,6 +65,8 @@ class PacketLevelTrainer:
         self.previous_entry = None
         self.total_packet_enc_loss = 0
 
+        self.FLOW_CHUNK_SIZE = 512
+
     def _init_vocab(self):
         vocab = {}
         with open(self.config.tokenizer_path, 'r', encoding='utf-8') as f:
@@ -110,68 +112,68 @@ class PacketLevelTrainer:
     def is_cuda_oom(e: Exception) -> bool:
         return isinstance(e, RuntimeError) and "out of memory" in str(e).lower()
 
-    # TODO (done): fix this to be compatible with manifest.json logic
-    # TODO (test)
+    # TODO (done): fix this to not cause OOMs
+    # TODO test
     def process_encodings(self, encodings, entry):
-        try:
-            if not encodings:
-                logger.error("process_encodings called with empty encodings list.")
-                return None
+        FLOW_CHUNK_SIZE = self.FLOW_CHUNK_SIZE
 
-            try:
-                final_packet_encodings = torch.cat(encodings, dim=0)
-                final_packet_encodings = final_packet_encodings.to(self.device)
-            except Exception as e:
-                if self.is_cuda_oom(e):
-                    logger.error("CUDA OOM while concatenating encodings")
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-                else:
-                    logger.exception(f"Failed concatenating encodings: {e}")
-                return None
-
-            direction_file_path = entry.get("direction")
-            if direction_file_path is None:
-                logger.error("Entry missing required key 'direction'.")
-                return None
-
-            try:
-                with open(direction_file_path, 'r', encoding="utf-8") as file:
-                    direction_data = [int(line.strip()) for line in file.readlines()]
-            except Exception as e:
-                # logger.exception(f"Failed reading direction file {direction_file_path}: {e}")
-                self.skipped += 1
-                return None
-
-            try:
-                direction_tensor = torch.tensor(direction_data, device=self.device)
-            except Exception as e:
-                logger.exception(f"Failed creating direction tensor: {e}")
-                return None
-
-            try:
-                flow_embeddings, pad_indices = self.flow_embedding(final_packet_encodings, direction_tensor)
-            except Exception as e:
-                logger.exception(f"FlowEmbedding forward pass failed: {e}")
-                return None
-
-            try:
-                flow_encoding, mpm_loss = self.flow_encoder(flow_embeddings, pad_indices)
-            except Exception as e:
-                logger.exception(f"FlowEncoder forward pass failed: {e}")
-                return None
-
-            try:
-                mpm_loss_tensor = mpm_loss[0].to(self.device)
-            except Exception as e:
-                logger.exception(f"Failed extracting MPM loss tensor: {e}")
-                return None
-
-            return mpm_loss_tensor
-
-        except Exception as e:
-            logger.exception(f"Unexpected error inside process_encodings: {e}")
+        if not encodings:
+            logger.error("process_encodings called with empty encodings list.")
             return None
+
+
+        direction_file_path = entry.get("direction")
+        if direction_file_path is None:
+            logger.error("Entry missing required key 'direction'.")
+            return None
+
+        try:
+            with open(direction_file_path, 'r', encoding="utf-8") as f:
+                direction_data = [int(line.strip()) for line in f]
+        except Exception:
+            return None
+
+        total_loss = 0.0
+        total_chunks = 0
+
+        start = 0
+
+        while start < len(encodings):
+            chunk = encodings[start : start + FLOW_CHUNK_SIZE]
+            dir_chunk = direction_data[start : start + FLOW_CHUNK_SIZE]
+
+            try:
+                packet_chunk = torch.cat(chunk, dim=0).to(self.device)
+                direction_tensor = torch.tensor(dir_chunk, device=self.device)
+
+                flow_embeddings, pad_indices = self.flow_embedding(
+                    packet_chunk, direction_tensor
+                )
+
+                _, mpm_loss = self.flow_encoder(flow_embeddings, pad_indices)
+
+                total_loss += mpm_loss[0]
+                total_chunks += 1
+
+            except Exception as e:
+                logger.exception(f"Unexpected error inside process_encodings: {e}")
+
+                if self.is_cuda_oom(e):
+                    print("Hit CUDA OOM")
+                    torch.cuda.empty_cache()
+                    return None
+                else:
+                    return None
+
+            finally:
+                del packet_chunk, direction_tensor, flow_embeddings
+                torch.cuda.empty_cache()
+
+            start += FLOW_CHUNK_SIZE
+
+        return total_loss / max(total_chunks, 1)
+
+
 
     def backward_and_optimize(self, accumulated_mlm_loss, accumulated_sfbo_loss):
 
