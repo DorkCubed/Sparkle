@@ -53,7 +53,7 @@ class PacketLevelTrainer:
 
         self.step_successful = False
 
-        self.accumulation_steps = 5
+        self.accumulation_steps = 2
         self.accumulated_mlm_loss = 0.0
         self.accumulated_sfbo_loss = 0.0
         self.batch_counter = 0
@@ -119,7 +119,7 @@ class PacketLevelTrainer:
                 return None
 
             try:
-                final_packet_encodings = torch.cat(encodings, dim=0)
+                final_packet_encodings = torch.cat(encodings, dim=0).to(self.device)
             except Exception as e:
                 logger.exception(f"Failed concatenating encodings: {e}")
                 return None
@@ -272,7 +272,7 @@ class PacketLevelTrainer:
                 if self.batch_counter == self.accumulation_steps:
                     self.backward_and_optimize(self.accumulated_mlm_loss, self.accumulated_sfbo_loss)
 
-                self.all_packet_encodings.append(encoded_packets_mean.detach())
+                self.all_packet_encodings.append(encoded_packets_mean.detach().cpu())
                 self.step_successful = True
             except Exception as e:
                 if self.is_cuda_oom(e):
