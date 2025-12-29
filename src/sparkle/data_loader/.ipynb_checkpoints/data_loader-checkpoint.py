@@ -31,7 +31,15 @@ class DataModule:
         )
 
     def _init_dataloader(self):
-        return DataLoader(self.dataset, batch_size=self.config.batch_size, shuffle=True)
+        num_workers = 4
+        return DataLoader(self.dataset, 
+                          batch_size=self.config.batch_size, 
+                          shuffle=False, 
+                          num_workers=num_workers,
+                          pin_memory = True,
+                          prefetch_factor=2,
+                          persistent_workers=True
+                         )
 
     # TODO: definitely not pythonic, update later
     def get_loader(self):
