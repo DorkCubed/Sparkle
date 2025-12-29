@@ -119,7 +119,7 @@ class PacketLevelTrainer:
                 return None
 
             try:
-                final_packet_encodings = torch.cat(encodings, dim=0).to(self.device)
+                final_packet_encodings = torch.cat(encodings, dim=0)
             except Exception as e:
                 logger.exception(f"Failed concatenating encodings: {e}")
                 return None
@@ -205,21 +205,21 @@ class PacketLevelTrainer:
             #     logger.exception(f"Unexpected error inside batch {i}: {e}")
             #     continue
 
-            try:
-                vocab_limit = self.config.vocab_size
-                max_idx = packet_sequences.max().item()
-                min_idx = packet_sequences.min().item()
+            # try:
+            #     vocab_limit = self.config.vocab_size
+            #     max_idx = packet_sequences.max().item()
+            #     min_idx = packet_sequences.min().item()
 
-                if max_idx >= vocab_limit or min_idx < 0:
-                    logger.error(
-                        f"SKIPPING BATCH {i}: Found invalid index {max_idx} (Max allowed: {vocab_limit - 1}) in file {entry.get('packet')}")
-                    self.skipped += 1
-                    progress_bar.set_postfix({"skipped": self.skipped})
-                    continue  # Skip safely, GPU is still healthy
-            except Exception as check_e:
-                logger.error(f"Error during index validation: {check_e}")
-                self.skipped += 1
-                continue
+            #     if max_idx >= vocab_limit or min_idx < 0:
+            #         logger.error(
+            #             f"SKIPPING BATCH {i}: Found invalid index {max_idx} (Max allowed: {vocab_limit - 1}) in file {entry.get('packet')}")
+            #         self.skipped += 1
+            #         progress_bar.set_postfix({"skipped": self.skipped})
+            #         continue  # Skip safely, GPU is still healthy
+            # except Exception as check_e:
+            #     logger.error(f"Error during index validation: {check_e}")
+            #     self.skipped += 1
+            #     continue
 
 
             try:
@@ -272,7 +272,7 @@ class PacketLevelTrainer:
                 if self.batch_counter == self.accumulation_steps:
                     self.backward_and_optimize(self.accumulated_mlm_loss, self.accumulated_sfbo_loss)
 
-                self.all_packet_encodings.append(encoded_packets_mean.detach().cpu())
+                self.all_packet_encodings.append(encoded_packets_mean.detach())
                 self.step_successful = True
             except Exception as e:
                 if self.is_cuda_oom(e):
