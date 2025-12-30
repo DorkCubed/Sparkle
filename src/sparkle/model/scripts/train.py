@@ -58,8 +58,6 @@ class PacketLevelTrainer:
         self.accumulated_sfbo_loss = 0.0
         self.batch_counter = 0
 
-        self.pending_flow_loss = None
-
         # bookkeeping logic
         self.previous_packet_file = None
         self.all_packet_encodings = []
@@ -135,7 +133,7 @@ class PacketLevelTrainer:
         except Exception:
             return None
 
-        total_loss = None
+        total_loss = 0.0
         total_chunks = 0
 
         start = 0
@@ -154,22 +152,22 @@ class PacketLevelTrainer:
 
                 _, mpm_loss = self.flow_encoder(flow_embeddings, pad_indices)
 
-                total_loss = mpm_loss if total_loss is None else total_loss + mpm_loss
+                total_loss += mpm_loss[0]
                 total_chunks += 1
 
-            except RuntimeError as e:
+            except Exception as e:
                 logger.exception(f"Unexpected error inside process_encodings: {e}")
 
                 if self.is_cuda_oom(e):
                     print("Hit CUDA OOM")
-                    # torch.cuda.empty_cache()
+                    torch.cuda.empty_cache()
                     return None
                 else:
                     return None
 
             finally:
                 del packet_chunk, direction_tensor, flow_embeddings
-                # torch.cuda.empty_cache()
+                torch.cuda.empty_cache()
 
             start += FLOW_CHUNK_SIZE
 
@@ -179,15 +177,13 @@ class PacketLevelTrainer:
 
     def backward_and_optimize(self, accumulated_mlm_loss, accumulated_sfbo_loss):
 
-        total_loss = accumulated_mlm_loss + accumulated_sfbo_loss + self.pending_flow_loss or 0.0
+        total_accumulated_loss = accumulated_mlm_loss + accumulated_sfbo_loss
 
         self.optimizer.zero_grad()
-        total_loss.backward()
+        total_accumulated_loss.backward()
         self.optimizer.step()
-
         self.accumulated_mlm_loss = 0.0
         self.accumulated_sfbo_loss = 0.0
-        self.pending_flow_loss = None
         self.batch_counter = 0
 
     def train_epoch(self, epoch):
@@ -255,7 +251,9 @@ class PacketLevelTrainer:
                     if self.all_packet_encodings:
                         mpm_loss = self.process_encodings(self.all_packet_encodings, self.previous_entry)
                         if mpm_loss is not None:
-                            self.pending_flow_loss = mpm_loss
+                            self.optimizer.zero_grad()
+                            mpm_loss.backward()
+                            self.optimizer.step()
 
                     # reset for new file
                     self.all_packet_encodings = []
@@ -317,10 +315,9 @@ class PacketLevelTrainer:
             if self.all_packet_encodings and self.previous_entry["packet"]:
                 final_loss = self.process_encodings(self.all_packet_encodings, self.previous_entry)
                 if final_loss is not None:
-                    self.pending_flow_loss = final_loss
-                    self.backward_and_optimize(
-                        self.accumulated_mlm_loss, self.accumulated_sfbo_loss
-                    )
+                    self.optimizer.zero_grad()
+                    final_loss.backward()
+                    self.optimizer.step()
         except Exception as e:
             logger.exception(f"Final mpm_loss computation failed: {e}")
 
