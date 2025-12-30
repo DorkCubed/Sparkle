@@ -66,6 +66,7 @@ class PacketLevelTrainer:
         self.total_packet_enc_loss = 0
 
         self.FLOW_CHUNK_SIZE = 512
+        self.MAX_PACKET_BUFFER = 10000
 
     def _init_vocab(self):
         vocab = {}
@@ -95,7 +96,7 @@ class PacketLevelTrainer:
             raise RuntimeError(f"Failed to squeeze {name}: {e}") from e
 
         try:
-            tensor = tensor.to(device)
+            tensor = tensor.to(device, non_blocking=True)
         except Exception as e:
             self.skipped += 1
             raise RuntimeError(f"Failed to move {name} to device {device}: {e}") from e
@@ -133,14 +134,20 @@ class PacketLevelTrainer:
         except Exception:
             return None
 
-        total_loss = 0.0
-        total_chunks = 0
+        max_len = len(encodings)
+        direction_data = direction_data[:max_len]
 
+        total_loss = 0.0
+        chunks_processed = 0
         start = 0
 
         while start < len(encodings):
-            chunk = encodings[start : start + FLOW_CHUNK_SIZE]
-            dir_chunk = direction_data[start : start + FLOW_CHUNK_SIZE]
+            end = min(start + FLOW_CHUNK_SIZE, max_len)
+            chunk = encodings[start : end]
+            dir_chunk = direction_data[start : end]
+
+            if len(chunk) == 0:
+                break
 
             try:
                 packet_chunk = torch.cat(chunk, dim=0).to(self.device)
@@ -152,26 +159,34 @@ class PacketLevelTrainer:
 
                 _, mpm_loss = self.flow_encoder(flow_embeddings, pad_indices)
 
-                total_loss += mpm_loss[0]
-                total_chunks += 1
+                loss = mpm_loss[0]
+
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
+
+                total_loss += loss.item()
+                chunks_processed += 1
 
             except Exception as e:
-                logger.exception(f"Unexpected error inside process_encodings: {e}")
-
                 if self.is_cuda_oom(e):
                     print("Hit CUDA OOM")
                     torch.cuda.empty_cache()
-                    return None
+                    break
                 else:
+                    logger.exception(f"Unexpected error: {e}")
                     return None
 
             finally:
                 del packet_chunk, direction_tensor, flow_embeddings
+                if 'flow_embeddings' in locals(): del flow_embeddings
+                if 'loss' in locals(): del loss
                 torch.cuda.empty_cache()
+
 
             start += FLOW_CHUNK_SIZE
 
-        return total_loss / max(total_chunks, 1)
+        return total_loss / max(chunks_processed, 1)
 
 
 
@@ -199,37 +214,6 @@ class PacketLevelTrainer:
         )
 
         for i, (packet_sequences, field_position, header_position, entry) in enumerate(progress_bar):
-            # try:
-            #     entry = {k: (v[0] if isinstance(v, list) else v) for k, v in entry.items()}
-            #     packet_sequences = packet_sequences.squeeze(0).to(self.device)
-            #     field_position = field_position.squeeze(0).to(self.device)
-            #     header_position = header_position.squeeze(0).to(self.device)
-            #
-            #     current_packet_file = entry.get("packet")
-            #     if current_packet_file is None:
-            #         logger.error("Missing required entry['packet'] in batch, skipping.")
-            #         continue
-            # except Exception as e:
-            #     logger.exception(f"Unexpected error inside batch {i}: {e}")
-            #     continue
-
-            # try:
-            #     vocab_limit = self.config.vocab_size
-            #     max_idx = packet_sequences.max().item()
-            #     min_idx = packet_sequences.min().item()
-
-            #     if max_idx >= vocab_limit or min_idx < 0:
-            #         logger.error(
-            #             f"SKIPPING BATCH {i}: Found invalid index {max_idx} (Max allowed: {vocab_limit - 1}) in file {entry.get('packet')}")
-            #         self.skipped += 1
-            #         progress_bar.set_postfix({"skipped": self.skipped})
-            #         continue  # Skip safely, GPU is still healthy
-            # except Exception as check_e:
-            #     logger.error(f"Error during index validation: {check_e}")
-            #     self.skipped += 1
-            #     continue
-
-
             try:
                 entry = {k: (v[0] if isinstance(v, list) else v) for k, v in entry.items()}
                 packet_sequences = self.safe_prepare(packet_sequences, "packet_sequences", self.device)
@@ -245,27 +229,18 @@ class PacketLevelTrainer:
                 self.skipped += 1
                 continue
 
-            # Handle file transitions safely
-            try:
-                if self.previous_entry is not None and current_packet_file != self.previous_packet_file:
-                    if self.all_packet_encodings:
-                        mpm_loss = self.process_encodings(self.all_packet_encodings, self.previous_entry)
-                        if mpm_loss is not None:
-                            self.optimizer.zero_grad()
-                            mpm_loss.backward()
-                            self.optimizer.step()
+            is_new_file = (self.previous_entry is not None and current_packet_file != self.previous_packet_file)
+            is_buffer_full = (len(self.all_packet_encodings) >= self.MAX_PACKET_BUFFER)
 
-                    # reset for new file
-                    self.all_packet_encodings = []
-                    self.total_packet_enc_loss = 0
+            if is_new_file or is_buffer_full:
+                if self.all_packet_encodings:
+                    context_entry = self.previous_entry if self.previous_entry else entry
+                    self.process_encodings(self.all_packet_encodings, context_entry)
 
-                self.previous_packet_file = current_packet_file
-            except Exception as e:
-                logger.exception(f"Error during file-boundary logic: {e}")
                 self.all_packet_encodings = []
-                self.total_packet_enc_loss = 0
-                self.skipped += 1
-                
+
+                if is_new_file:
+                    self.previous_packet_file = current_packet_file
 
             try:
                 # Packet-level forward pass
@@ -277,10 +252,11 @@ class PacketLevelTrainer:
                 self.accumulated_sfbo_loss += sfbo_loss
                 self.batch_counter += 1
 
-                if self.batch_counter == self.accumulation_steps:
+                if self.batch_counter >= self.accumulation_steps:
                     self.backward_and_optimize(self.accumulated_mlm_loss, self.accumulated_sfbo_loss)
 
                 self.all_packet_encodings.append(encoded_packets_mean.detach().cpu())
+                self.previous_entry = entry
                 self.step_successful = True
             except Exception as e:
                 if self.is_cuda_oom(e):
@@ -298,11 +274,10 @@ class PacketLevelTrainer:
                     self.all_packet_encodings = []
 
                     self.skipped += 1
-                    continue
-                continue
+                else:
+                    logger.exception(f"Unexpected error: {e}")
+                    self.skipped += 1
                 
-
-            self.previous_entry = entry
 
 
             progress_bar.set_postfix({
