@@ -138,7 +138,10 @@ def apply_sfbo_masking(packet_seq, field_pos, max_span_length, padding_value, sf
     # Randomly select number of spans and validate bounds
     num_spans = random.randint(1, max_span_length)
     if num_spans > len(unique_fields):
-        raise ValueError("num_spans exceeds the length of unique_fields list")
+        num_spans = unique_fields
+
+    if num_spans == 0:
+        return torch.zeros_like(packet_seq, dtype=torch.bool)
 
     # Select a random span of unique fields
     start_index = random.randint(0, len(unique_fields) - num_spans)
