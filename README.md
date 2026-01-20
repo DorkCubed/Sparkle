@@ -1,5 +1,40 @@
 # SPARKLE 
 
+## Setting up
+
+### Installation 
+```shell
+# Install uv (the fast Python package manager)
+curl -LsSf https://astral.sh/uv/install.sh | sh 
+
+# or see: https://docs.astral.sh/uv/
+
+# Verify installation
+uv --version
+```
+
+### Project Setup 
+
+```shell
+uv sync
+```
+
+### Training the model
+
+```shell
+uv python -m sparkle.model.scripts.train
+```
+
+## Contributors
+
+1. Satvik (@Satvik13o7)
+2. Kavish Kashyap 
+3. Arnav Garg (@DorkCubed)
+4. Atharva Gupta (@atharva7-g)
+
+
+### Notes
+
 `manifest.json` format
 ```json
 [
