@@ -1,0 +1,16 @@
+[project]
+name = "sparkle"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "boto3>=1.39.16",
+    "numpy>=2.3.2",
+    "s3fs>=0.4.2",
+    "torch>=2.7.1",
+    "tqdm>=4.67.1",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
