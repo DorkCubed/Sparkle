@@ -1,3 +1,11 @@
 *Zone.Identifier
 __pycache__/
 *.py[cod]
+
+.venv/
+*.egg-info/
+.idea
+manifest/
+src/sparkle/logs/
+logs/
+/dataset/local_10/
