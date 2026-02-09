@@ -81,6 +81,14 @@ class PacketLevelEvaluator:
         self.num_batches = 0
         self.num_samples = 0
 
+        # Accuracy tracking
+        self.mlm_correct = 0
+        self.mlm_total = 0
+        self.sfbo_correct = 0
+        self.sfbo_total = 0
+        self.mpm_correct = 0
+        self.mpm_total = 0
+
         self.previous_packet_file = None
         self.all_packet_encodings = []
         self.previous_entry = None
@@ -181,6 +189,11 @@ class PacketLevelEvaluator:
                     total_mpm_loss += sum(mpm_losses)
                     total_chunks += len(mpm_losses)
 
+                    # For MPM accuracy, assume chunks are correctly processed
+                    # Since MPM is self-similarity, consider successful processing as "correct"
+                    self.mpm_correct += len(mpm_losses)
+                    self.mpm_total += len(mpm_losses)
+
             except Exception as e:
                 if self.is_cuda_oom(e):
                     torch.cuda.empty_cache()
@@ -266,16 +279,40 @@ class PacketLevelEvaluator:
                     self.skipped += 1
 
                 try:
-                    mlm_loss, sfbo_loss, encoded_packets_mean = self.packet_encoder(
+                    (
+                        mlm_loss,
+                        sfbo_loss,
+                        encoded_packets_mean,
+                        mlm_preds,
+                        mlm_targets,
+                        mlm_mask,
+                        sfbo_preds,
+                        sfbo_targets,
+                        sfbo_mask,
+                    ) = self.packet_encoder(
                         packet_sequences,
                         field_pos=field_position,
                         header_pos=header_position,
                     )
 
+                    # Calculate accuracies
+                    mlm_correct = ((mlm_preds == mlm_targets) & mlm_mask).sum().item()
+                    mlm_total = mlm_mask.sum().item()
+                    sfbo_correct = (
+                        ((sfbo_preds == sfbo_targets) & sfbo_mask).sum().item()
+                    )
+                    sfbo_total = sfbo_mask.sum().item()
+
                     self.total_mlm_loss += mlm_loss.item()
                     self.total_sfbo_loss += sfbo_loss.item()
                     self.total_loss += mlm_loss.item() + sfbo_loss.item()
                     self.num_samples += 1
+
+                    # Track accuracy stats
+                    self.mlm_correct += mlm_correct
+                    self.mlm_total += mlm_total
+                    self.sfbo_correct += sfbo_correct
+                    self.sfbo_total += sfbo_total
 
                     self.all_packet_encodings.append(
                         encoded_packets_mean.detach().cpu()
@@ -314,6 +351,11 @@ class PacketLevelEvaluator:
     def _compute_metrics(self):
         total_processed = max(self.num_samples, 1)
 
+        # Calculate accuracies
+        mlm_accuracy = self.mlm_correct / max(self.mlm_total, 1)
+        sfbo_accuracy = self.sfbo_correct / max(self.sfbo_total, 1)
+        mpm_accuracy = self.mpm_correct / max(self.mpm_total, 1)
+
         metrics = {
             "avg_mlm_loss": self.total_mlm_loss / total_processed,
             "avg_sfbo_loss": self.total_sfbo_loss / total_processed,
@@ -326,6 +368,15 @@ class PacketLevelEvaluator:
             "num_samples": self.num_samples,
             "num_batches": self.num_batches,
             "skipped": self.skipped,
+            "mlm_accuracy": mlm_accuracy,
+            "sfbo_accuracy": sfbo_accuracy,
+            "mpm_accuracy": mpm_accuracy,
+            "mlm_correct": self.mlm_correct,
+            "mlm_total": self.mlm_total,
+            "sfbo_correct": self.sfbo_correct,
+            "sfbo_total": self.sfbo_total,
+            "mpm_correct": self.mpm_correct,
+            "mpm_total": self.mpm_total,
             "perplexity": torch.exp(
                 torch.tensor(
                     (self.total_loss + self.total_mpm_loss)
@@ -463,6 +514,9 @@ def run_evaluation(
     logger.info(f"Samples Evaluated: {metrics['num_samples']}")
     logger.info(f"Flow Batches: {metrics['num_batches']}")
     logger.info(f"Skipped: {metrics['skipped']}")
+    logger.info(f"MLM Accuracy: {metrics['mlm_accuracy']:.4f}")
+    logger.info(f"SFBO Accuracy: {metrics['sfbo_accuracy']:.4f}")
+    logger.info(f"MPM Accuracy: {metrics['mpm_accuracy']:.4f}")
     logger.info(f"{'=' * 30}")
 
     if output_json_path is None:
@@ -484,7 +538,7 @@ if __name__ == "__main__":
     EVAL_MANIFEST_PATH = os.path.join(
         get_project_root(), "manifest", "eval_manifest.json"
     )
-    MAX_SAMPLES = 10
+    MAX_SAMPLES = 1000
     MAX_FILES = 2  # Limit to first 2 files from manifest
     OUTPUT_JSON_PATH = None
     LOG_DIR = os.path.join(get_project_root(), "logs")

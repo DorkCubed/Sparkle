@@ -4,7 +4,16 @@ import torch.nn.functional as F
 
 
 class FlowLevelEncoder(nn.Module):
-    def __init__(self, embed_dim, n_layers, attn_heads, dropout, vocab, max_flow_length=510, mask_prob=0.15):
+    def __init__(
+        self,
+        embed_dim,
+        n_layers,
+        attn_heads,
+        dropout,
+        vocab,
+        max_flow_length=510,
+        mask_prob=0.15,
+    ):
         super(FlowLevelEncoder, self).__init__()
 
         # Initialize class variables
@@ -12,15 +21,20 @@ class FlowLevelEncoder(nn.Module):
         self.n_layers = n_layers
         self.attn_heads = attn_heads
         self.dropout = dropout
-        self.max_flow_length =  int(max_flow_length)
+        self.max_flow_length = int(max_flow_length)
         self.mask_prob = mask_prob
         self.vocab = vocab
 
         # Initialize the flow encoder block with TransformerEncoder
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=embed_dim, nhead=attn_heads, dim_feedforward=embed_dim * 4, dropout=dropout
+            d_model=embed_dim,
+            nhead=attn_heads,
+            dim_feedforward=embed_dim * 4,
+            dropout=dropout,
         )
-        self.flow_encoder_block = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)
+        self.flow_encoder_block = nn.TransformerEncoder(
+            encoder_layer, num_layers=n_layers
+        )
 
         # Initialize the MPM predictor and similarity calculation
         self.mpm_predictor = nn.Linear(embed_dim, embed_dim)
@@ -40,11 +54,11 @@ class FlowLevelEncoder(nn.Module):
             # flow_seq = flow_seq.to(device)
             # Divide the flow into fractions of max_flow_length
             flow_fractions = [
-                flow_seq[i:i + self.max_flow_length] 
+                flow_seq[i : i + self.max_flow_length]
                 for i in range(0, len(flow_seq), self.max_flow_length)
             ]
             pad_fractions = [
-                pad_indices[i:i + self.max_flow_length] 
+                pad_indices[i : i + self.max_flow_length]
                 for i in range(0, len(flow_seq), self.max_flow_length)
             ]
 
@@ -60,7 +74,9 @@ class FlowLevelEncoder(nn.Module):
                 masked_fraction, mask_indices = apply_mpm_masking(
                     fraction, self.mask_prob, pad_indices_fraction
                 )
-                masked_fraction = masked_fraction.to(device)  # Ensure masked_fraction is on the correct device
+                masked_fraction = masked_fraction.to(
+                    device
+                )  # Ensure masked_fraction is on the correct device
                 fraction_encoding = self.flow_encoder_block(masked_fraction)
                 # masked_fraction = masked_fraction.to(fraction.device)
                 # print("device: ", fraction_encoding.device, fraction.device)
@@ -73,9 +89,9 @@ class FlowLevelEncoder(nn.Module):
             # Aggregate the fraction encodings using self-attention pooling
             flow_encoding = self.self_attn_pooling(fraction_encodings)
             flow_encodings.append(flow_encoding)
-            flow_encodings_tensor = torch.stack(flow_encodings)  # Convert list to tensor
+        flow_encodings_tensor = torch.stack(flow_encodings)  # Convert list to tensor
+
         return flow_encodings_tensor, mpm_losses
-        # return flow_encodings, mpm_losses
 
     def calculate_mpm_loss(self, fraction_encoding, original_fraction, mask_indices):
         # Move original_fraction to the same device as fraction_encoding
@@ -90,22 +106,27 @@ class FlowLevelEncoder(nn.Module):
         # Check if similarity_matrix is empty or 1D
         if similarity_matrix.dim() == 0:
             print("Warning: Similarity matrix is empty.")
-            return torch.tensor(0.0, device=similarity_matrix.device)  # Return a zero loss
+            return torch.tensor(
+                0.0, device=similarity_matrix.device
+            )  # Return a zero loss
         elif similarity_matrix.dim() == 1:
             # print("Warning: Similarity matrix is 1D, reshaping to 2D.")
             similarity_matrix = similarity_matrix.unsqueeze(0)  # Reshape to 2D
 
         # Generate targets
-        targets = torch.arange(similarity_matrix.size(0), device=similarity_matrix.device)
+        targets = torch.arange(
+            similarity_matrix.size(0), device=similarity_matrix.device
+        )
 
         # Ensure targets have the correct size for cross-entropy
         if similarity_matrix.size(0) == 0:
-            return torch.tensor(0.0, device=similarity_matrix.device)  # Prevent further error
+            return torch.tensor(
+                0.0, device=similarity_matrix.device
+            )  # Prevent further error
 
         # Compute the cross-entropy loss
         mpm_loss = F.cross_entropy(similarity_matrix, targets)
         return mpm_loss
-
 
     # def calculate_mpm_loss(self, fraction_encoding, original_fraction, mask_indices):
     #     # Compute the similarity matrix
@@ -134,9 +155,6 @@ class FlowLevelEncoder(nn.Module):
     #     return mpm_loss
 
 
-
-
-
 class SelfAttentionPooling(nn.Module):
     def __init__(self, embed_dim):
         super(SelfAttentionPooling, self).__init__()
@@ -149,14 +167,22 @@ class SelfAttentionPooling(nn.Module):
         attention_scores = []
         for fraction_encoding in fraction_encodings:
             m = torch.tanh(torch.mm(fraction_encoding, self.weight_m) + self.bias_m)
-            attention_score = torch.mm(m, self.weight_u.unsqueeze(1))  # Changed to unsqueeze(1) for correct shape
+            attention_score = torch.mm(
+                m, self.weight_u.unsqueeze(1)
+            )  # Changed to unsqueeze(1) for correct shape
             attention_scores.append(attention_score)
 
-        attention_scores = torch.cat(attention_scores, dim=0).squeeze(-1)  # Concatenate along the first dimension
+        attention_scores = torch.cat(attention_scores, dim=0).squeeze(
+            -1
+        )  # Concatenate along the first dimension
         attention_weights = F.softmax(attention_scores, dim=0)
 
-        flow_encoding = torch.sum(torch.stack(fraction_encodings, dim=0) * attention_weights.unsqueeze(-1), dim=0)
+        flow_encoding = torch.sum(
+            torch.stack(fraction_encodings, dim=0) * attention_weights.unsqueeze(-1),
+            dim=0,
+        )
         return flow_encoding
+
 
 def apply_mpm_masking(packet_encodings, mask_prob, pad_indices):
     """
@@ -172,8 +198,9 @@ def apply_mpm_masking(packet_encodings, mask_prob, pad_indices):
     pad_indices = pad_indices.bool().to(packet_encodings.device)
 
     # Ensure the sizes match
-    assert pad_indices.size(0) == packet_encodings.size(0), \
+    assert pad_indices.size(0) == packet_encodings.size(0), (
         "pad_indices and packet_encodings must have the same length."
+    )
 
     # Identify eligible indices (non-padding positions)
     eligible_indices = (~pad_indices).nonzero(as_tuple=True)[0]
@@ -183,7 +210,11 @@ def apply_mpm_masking(packet_encodings, mask_prob, pad_indices):
         return packet_encodings, torch.tensor([], device=packet_encodings.device)
 
     # Randomly decide which eligible indices to mask
-    mask_decision = torch.bernoulli(torch.full((eligible_indices.size(0),), mask_prob, device=packet_encodings.device))
+    mask_decision = torch.bernoulli(
+        torch.full(
+            (eligible_indices.size(0),), mask_prob, device=packet_encodings.device
+        )
+    )
     mask_indices = eligible_indices[mask_decision.bool()]
 
     if mask_indices.numel() == 0:
@@ -210,7 +241,6 @@ def apply_mpm_masking(packet_encodings, mask_prob, pad_indices):
 #     masked_packets[mask_indices] = torch.randn_like(masked_packets[mask_indices])
 
 #     return masked_packets, mask_indices
-
 
 
 # VOCAB_SIZE = 256

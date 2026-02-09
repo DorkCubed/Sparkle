@@ -4,22 +4,23 @@ import torch.nn.functional as F
 import random
 from sparkle.model.embedding import PacketEmbedding
 
+
 class PacketLevelEncoder(nn.Module):
     def __init__(self, vocab_size, embed_dim, max_len, num_heads, num_layers, dropout):
         super(PacketLevelEncoder, self).__init__()
 
         # initialise the embedding layer
-        self.embedding = PacketEmbedding(
-            vocab_size, max_len, embed_dim, dropout)
+        self.embedding = PacketEmbedding(vocab_size, max_len, embed_dim, dropout)
         # self.embedding_span = PacketEmbedding(
-        #     vocab_size, max_len, embed_dim*3, dropout) # for sfbo 
+        #     vocab_size, max_len, embed_dim*3, dropout) # for sfbo
         # initialsise the encoder from PyTorch
         self.encoder_layer = nn.TransformerEncoderLayer(
-            embed_dim, num_heads, embed_dim * 4, dropout)
-        
+            embed_dim, num_heads, embed_dim * 4, dropout
+        )
+
         self.encoder = nn.TransformerEncoder(self.encoder_layer, num_layers)
 
-        # for sfbo 
+        # for sfbo
         # self.encoder_layer_span = nn.TransformerEncoderLayer(
         #     embed_dim*3, num_heads, embed_dim * 6, dropout)
         # self.encoder_span = nn.TransformerEncoder(self.encoder_layer_span, num_layers)
@@ -27,9 +28,7 @@ class PacketLevelEncoder(nn.Module):
         # initialise the mlm and sfbo predictor
         self.mlm_predictor = nn.Linear(embed_dim, vocab_size)
         self.sfbo_predictor = nn.Sequential(
-            nn.Linear(embed_dim, embed_dim),
-            nn.ReLU(),
-            nn.Linear(embed_dim, vocab_size)
+            nn.Linear(embed_dim, embed_dim), nn.ReLU(), nn.Linear(embed_dim, vocab_size)
         )
         # self.sfbo_predictor = nn.Sequential(
         #     nn.Linear(embed_dim*3, embed_dim),
@@ -53,25 +52,50 @@ class PacketLevelEncoder(nn.Module):
         # We embed and encode for SFBO
         span_emb = self.embedding(span_masks, field_pos, header_pos).squeeze(0)
         span_encoded_packets = self.encoder(span_emb)
-        sfbo_loss = self.compute_sfbo_loss(span_encoded_packets, span_masks, packet_sequences)
+        sfbo_loss = self.compute_sfbo_loss(
+            span_encoded_packets, span_masks, packet_sequences
+        )
 
         # We DETACH here. This ensures this purely informational tensor
         # does not keep the computation graph alive.
         mean_encoded_packets = torch.mean(
             torch.stack((mask_encoded_packets.detach(), span_encoded_packets.detach())),
-            dim=0
+            dim=0,
         )
 
         # Removed torch.cuda.empty_cache() - it hurts performance here
 
-        return mlm_loss, sfbo_loss, mean_encoded_packets
+        # Get predictions for accuracy calculation
+        with torch.no_grad():
+            mlm_logits = self.mlm_predictor(mask_encoded_packets)
+            mlm_preds = torch.argmax(mlm_logits, dim=-1)
+
+            sfbo_logits = self.sfbo_predictor(span_encoded_packets)
+            sfbo_preds = torch.argmax(sfbo_logits, dim=-1)
+
+            # Create masks for valid (non-padding) positions
+            mlm_mask = masked_packets != 0
+            sfbo_mask = span_masks != 0
+
+        return (
+            mlm_loss,
+            sfbo_loss,
+            mean_encoded_packets,
+            mlm_preds,
+            masked_packets,
+            mlm_mask,
+            sfbo_preds,
+            span_masks,
+            sfbo_mask,
+        )
 
     def compute_mlm_loss(self, encoded_packets, masked_packets):
         mlm_logits = self.mlm_predictor(encoded_packets)
         # print("mlm logits: ", mlm_logits.shape)
         # print(mlm_logits.view(-1, mlm_logits.size(-1)).shape, (masked_packets.view(-1)).shape)
         mlm_loss = F.cross_entropy(
-            mlm_logits.reshape(-1, mlm_logits.size(-1)), masked_packets.reshape(-1))
+            mlm_logits.reshape(-1, mlm_logits.size(-1)), masked_packets.reshape(-1)
+        )
         return mlm_loss
 
     def compute_sfbo_loss(self, span_encoded_packets, span_masks, packet_sequences):
@@ -85,7 +109,10 @@ class PacketLevelEncoder(nn.Module):
 
         return sfbo_loss
 
-def apply_mlm_sfbo_masking(packet_sequences, field_pos, mlm_prob=0.15, sfbo_prob=0.15, max_span_length=6):
+
+def apply_mlm_sfbo_masking(
+    packet_sequences, field_pos, mlm_prob=0.15, sfbo_prob=0.15, max_span_length=6
+):
     span_masks = []
     masked_sequences = []
 
@@ -95,8 +122,10 @@ def apply_mlm_sfbo_masking(packet_sequences, field_pos, mlm_prob=0.15, sfbo_prob
     for packet_seq, field_pos_seq in zip(packet_sequences, field_pos):
         # Perform masking on CPU
         masked_seq = apply_mlm_masking(packet_seq, mlm_prob).cpu()
-        span_mask = apply_sfbo_masking(packet_seq, field_pos_seq, max_span_length=max_span_length, padding_value=4).cpu()
-        
+        span_mask = apply_sfbo_masking(
+            packet_seq, field_pos_seq, max_span_length=max_span_length, padding_value=4
+        ).cpu()
+
         # Collect results
         masked_sequences.append(masked_seq)
         span_masks.append(span_mask)
@@ -124,7 +153,9 @@ def apply_mlm_masking(packet_seq, mlm_prob):
     return masked_sequences
 
 
-def apply_sfbo_masking(packet_seq, field_pos, max_span_length, padding_value, sfbo_prob=0.15):
+def apply_sfbo_masking(
+    packet_seq, field_pos, max_span_length, padding_value, sfbo_prob=0.15
+):
     # Move tensors to CPU for processing
     packet_seq_cpu = packet_seq.cpu()
     field_pos_cpu = field_pos.cpu()
@@ -142,13 +173,17 @@ def apply_sfbo_masking(packet_seq, field_pos, max_span_length, padding_value, sf
 
     # Select a random span of unique fields
     start_index = random.randint(0, len(unique_fields) - num_spans)
-    span_selection = unique_fields[start_index:start_index + num_spans]
+    span_selection = unique_fields[start_index : start_index + num_spans]
 
     # Flatten `field_pos` to make it 1-dimensional if needed
-    field_pos_flat = field_pos_cpu.view(-1) if field_pos_cpu.dim() > 1 else field_pos_cpu
+    field_pos_flat = (
+        field_pos_cpu.view(-1) if field_pos_cpu.dim() > 1 else field_pos_cpu
+    )
 
     # Identify positions of the selected spans
-    span_positions = [i for i, value in enumerate(field_pos_flat) if value.item() in span_selection]
+    span_positions = [
+        i for i, value in enumerate(field_pos_flat) if value.item() in span_selection
+    ]
 
     # Filter span_positions to ensure they are within bounds of `packet_seq`
     span_positions = [idx for idx in span_positions if idx < len(packet_seq_cpu)]
@@ -158,10 +193,8 @@ def apply_sfbo_masking(packet_seq, field_pos, max_span_length, padding_value, sf
     sfbo_mask = random_mask < sfbo_prob
 
     for idx, mask in zip(span_positions, sfbo_mask):
-        if mask:  
+        if mask:
             masked_packet_seq[idx] = padding_value  # Apply the padding value
 
     # Return the masked sequence on the CPU
     return masked_packet_seq
-
-
