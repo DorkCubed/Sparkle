@@ -1,18 +1,32 @@
 import json
+import os
 from pathlib import Path
 
 from s3fs import S3FileSystem
 from torch.utils.data import Dataset
 
 from sparkle.configs.config import Config
-from sparkle.data_loader.encoder.positional_encodings import field_pos_safe, header_pos_safe
+from sparkle.data_loader.encoder.positional_encodings import (
+    field_pos_safe,
+    header_pos_safe,
+)
+
+
+def remap_path(s3_path):
+    """Remap S3-style paths to local paths"""
+    if s3_path and s3_path.startswith("netml-s3-bucket/"):
+        return os.path.join(os.path.expanduser("~/sparkle-finetuning"), s3_path)
+    return s3_path
 
 
 class PacketSequenceDataset(Dataset):
-    def __init__(self, config: Config, manifest_path, tokenizer, chunk_size):
+    def __init__(
+        self, config: Config, manifest_path, tokenizer, chunk_size, max_files=None
+    ):
         self.tokenizer = tokenizer
         self.config = config
         self.manifest_path = manifest_path
+        self.max_files = max_files
         self.files = self._load_manifest()
         self.fs = S3FileSystem()
 
@@ -28,11 +42,15 @@ class PacketSequenceDataset(Dataset):
         self.total_len = sum(self.total_chunks)
 
     def _load_manifest(self):
-        with open(self.manifest_path, 'r') as f:
+        with open(self.manifest_path, "r") as f:
             data = json.load(f)
 
+        # Limit the number of files if max_files is specified
+        if self.max_files is not None:
+            data = data[: self.max_files]
+
         files = [
-            {k: m[k] for k in ("packet", "header", "field", "direction")}
+            {k: remap_path(m[k]) for k in ("packet", "header", "field", "direction")}
             for m in data
         ]
 
@@ -64,11 +82,13 @@ class PacketSequenceDataset(Dataset):
             entry["packet"],
             entry["header"],
             entry["field"],
-            entry["direction"]
+            entry["direction"],
         )
 
         hex_dumps = self._read_file(packet_path).splitlines()
-        padded_all_tokens, token_ids, mask, max_length = self.tokenizer.encode_packet(hex_dumps)
+        padded_all_tokens, token_ids, mask, max_length = self.tokenizer.encode_packet(
+            hex_dumps
+        )
 
         # Slice out the chunk from token_ids
         chunk_start = line_idx * self.chunk_size
