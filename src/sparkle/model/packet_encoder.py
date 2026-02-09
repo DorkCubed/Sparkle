@@ -44,6 +44,10 @@ class PacketLevelEncoder(nn.Module):
         masked_packets = masked_packets.to(device, non_blocking=True)
         span_masks = span_masks.to(device, non_blocking=True)
 
+        # Track which positions were masked for accuracy calculation
+        mlm_masked_positions = (masked_packets != packet_sequences) & (packet_sequences != 0)
+        sfbo_masked_positions = (span_masks != packet_sequences) & (packet_sequences != 0)
+
         # We embed and encode for MLM
         mask_emb = self.embedding(masked_packets, field_pos, header_pos).squeeze(0)
         mask_encoded_packets = self.encoder(mask_emb)
@@ -73,20 +77,16 @@ class PacketLevelEncoder(nn.Module):
             sfbo_logits = self.sfbo_predictor(span_encoded_packets)
             sfbo_preds = torch.argmax(sfbo_logits, dim=-1)
 
-            # Create masks for valid (non-padding) positions
-            mlm_mask = masked_packets != 0
-            sfbo_mask = span_masks != 0
-
         return (
             mlm_loss,
             sfbo_loss,
             mean_encoded_packets,
             mlm_preds,
-            masked_packets,
-            mlm_mask,
+            packet_sequences,
+            mlm_masked_positions,
             sfbo_preds,
-            span_masks,
-            sfbo_mask,
+            packet_sequences,
+            sfbo_masked_positions,
         )
 
     def compute_mlm_loss(self, encoded_packets, masked_packets):
