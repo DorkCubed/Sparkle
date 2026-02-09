@@ -86,8 +86,6 @@ class PacketLevelEvaluator:
         self.mlm_total = 0
         self.sfbo_correct = 0
         self.sfbo_total = 0
-        self.mpm_correct = 0
-        self.mpm_total = 0
 
         self.previous_packet_file = None
         self.all_packet_encodings = []
@@ -188,11 +186,6 @@ class PacketLevelEvaluator:
                 if mpm_losses:
                     total_mpm_loss += sum(mpm_losses)
                     total_chunks += len(mpm_losses)
-
-                    # For MPM accuracy, assume chunks are correctly processed
-                    # Since MPM is self-similarity, consider successful processing as "correct"
-                    self.mpm_correct += len(mpm_losses)
-                    self.mpm_total += len(mpm_losses)
 
             except Exception as e:
                 if self.is_cuda_oom(e):
@@ -295,7 +288,7 @@ class PacketLevelEvaluator:
                         header_pos=header_position,
                     )
 
-                    # Calculate accuracies
+                    # Calculate accuracies only on masked positions
                     mlm_correct = ((mlm_preds == mlm_targets) & mlm_mask).sum().item()
                     mlm_total = mlm_mask.sum().item()
                     sfbo_correct = (
@@ -354,7 +347,6 @@ class PacketLevelEvaluator:
         # Calculate accuracies
         mlm_accuracy = self.mlm_correct / max(self.mlm_total, 1)
         sfbo_accuracy = self.sfbo_correct / max(self.sfbo_total, 1)
-        mpm_accuracy = self.mpm_correct / max(self.mpm_total, 1)
 
         metrics = {
             "avg_mlm_loss": self.total_mlm_loss / total_processed,
@@ -370,13 +362,10 @@ class PacketLevelEvaluator:
             "skipped": self.skipped,
             "mlm_accuracy": mlm_accuracy,
             "sfbo_accuracy": sfbo_accuracy,
-            "mpm_accuracy": mpm_accuracy,
             "mlm_correct": self.mlm_correct,
             "mlm_total": self.mlm_total,
             "sfbo_correct": self.sfbo_correct,
             "sfbo_total": self.sfbo_total,
-            "mpm_correct": self.mpm_correct,
-            "mpm_total": self.mpm_total,
             "perplexity": torch.exp(
                 torch.tensor(
                     (self.total_loss + self.total_mpm_loss)
@@ -516,7 +505,6 @@ def run_evaluation(
     logger.info(f"Skipped: {metrics['skipped']}")
     logger.info(f"MLM Accuracy: {metrics['mlm_accuracy']:.4f}")
     logger.info(f"SFBO Accuracy: {metrics['sfbo_accuracy']:.4f}")
-    logger.info(f"MPM Accuracy: {metrics['mpm_accuracy']:.4f}")
     logger.info(f"{'=' * 30}")
 
     if output_json_path is None:
