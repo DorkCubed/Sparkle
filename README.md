@@ -28,7 +28,7 @@ uv python -m sparkle.model.scripts.train
 ## Contributors
 
 1. Satvik (https://github.com/satvik13o7/)
-2. Kavish Kashyap 
+2. Kavish Kashyap (https://github.com/Real-Professor/)
 3. Arnav Garg (https://github.com/dorkcubed/)
 4. Atharva Gupta (https://github.com/atharva7-g/)
 
