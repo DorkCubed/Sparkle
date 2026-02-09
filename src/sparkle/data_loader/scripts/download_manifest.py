@@ -15,7 +15,7 @@ INPUT_MANIFEST = config.manifest_path
 project_root = get_project_root()
 OUTPUT_MANIFEST = os.path.join(project_root, "manifest", "local_manifest.json")
 
-LOCAL_BASE = os.path.join(os.path.dirname(project_root), "sparkle-datavol", "local")
+LOCAL_BASE = os.path.join(os.path.dirname(project_root), "sparkle-finetuning")
 
 fs = s3fs.S3FileSystem()
 
@@ -32,12 +32,14 @@ def download_s3_uri(uri: str, base: str) -> str:
 
     return local_path
 
+
 def _download_item_fields(item: dict, fields: list) -> dict:
     out = {}
 
     for f_name in fields:
         out[f_name] = download_s3_uri(item[f_name], LOCAL_BASE)
     return out
+
 
 def process_manifest():
     with open(INPUT_MANIFEST, "r") as f:
@@ -67,13 +69,13 @@ def process_manifest():
                 executor.shutdown(cancel_futures=True)
                 raise
 
-
     os.makedirs(os.path.dirname(OUTPUT_MANIFEST), exist_ok=True)
 
     with open(OUTPUT_MANIFEST, "w") as f:
         json.dump(new_manifest, f, indent=4)
 
     print(f"Manifest processing complete. Saved to {OUTPUT_MANIFEST}")
+
 
 def process_direction():
     with open(OUTPUT_MANIFEST, "r") as f:
@@ -97,7 +99,10 @@ def process_direction():
     with open(OUTPUT_MANIFEST, "w") as f:
         json.dump(cleaned_manifest, f, indent=4)
 
-    print(f"Removed {fields_removed} fields. {len(cleaned_manifest)} entries now in manifest.")
+    print(
+        f"Removed {fields_removed} fields. {len(cleaned_manifest)} entries now in manifest."
+    )
+
 
 if __name__ == "__main__":
     try:

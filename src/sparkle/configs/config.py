@@ -3,21 +3,27 @@ from sparkle.utils import get_project_root
 import logging
 from datetime import datetime
 
+
 class Config:
     def __init__(self):
-        self.bucket = 'netml-s3-bucket'
+        self.bucket = "netml-s3-bucket"
         project_root = get_project_root()
         current_dir = os.path.dirname(__file__)
         self.split_folder = "split"
         parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir))
         self.logging_dir = os.path.join(parent_dir, "logs")
-        self.parents = [f"{self.bucket}/Working_folder/input_aws/Wireshark_Sample_PCAPs/split/", f"{self.bucket}/Working_folder/input_aws/"]
+        self.parents = [
+            f"{self.bucket}/Working_folder/input_aws/Wireshark_Sample_PCAPs/split/",
+            f"{self.bucket}/Working_folder/input_aws/",
+        ]
 
         # might potentially take time
         self.fetcher = None
         self.files = None
 
-        self.tokenizer_path = os.path.join(parent_dir, "data_loader", "tokenizer", "vocab.txt")
+        self.tokenizer_path = os.path.join(
+            parent_dir, "data_loader", "tokenizer", "vocab.txt"
+        )
         # self.manifest_path = os.path.join(project_root, "manifest", "manifest.json")
         # self.manifest_path = os.path.join(parent_dir, "manifest", "test_manifest.json")
         # self.manifest_path = os.path.join(project_root, "manifest", "manifest.json")
@@ -28,7 +34,9 @@ class Config:
         # self.manifest_path = os.path.join(project_root, "manifest", "local_manifest_5000.json")
         # self.manifest_path = os.path.join(project_root, "manifest", "local_manifest.json")
         # self.manifest_path = os.path.join(project_root, "manifest", "manifest_5000.json")
-        self.manifest_path = os.path.join(project_root, "manifest", "local_manifest.json")
+        self.manifest_path = os.path.join(
+            project_root, "manifest", "eval_manifest.json"
+        )
         # self.manifest_path = os.path.join(project_root, "manifest", "local_manifest_10.json")
         # self.manifest_path = os.path.join(project_root, "manifest", "local_manifest_54.json")
         self.batch_size = 1
@@ -43,27 +51,27 @@ class Config:
         self.mask_prob = 0.15
         self.num_epochs = 1
         self.max_len = 578  # 512
-        self.chunk_size = 4 # earlier batch_size_1
+        self.chunk_size = 4  # earlier batch_size_1
         self.learning_rate = 0.001
 
     def initialize_data_fetcher(self):
         """Call this when you actually need the data"""
         if self.fetcher is None:
             from src.sparkle.data_loader.scripts.s3_utils import S3DataFetcher
+
             self.fetcher = S3DataFetcher(self.bucket)
-            self.files = self.fetcher.list_split_objects(self.parents, split=self.split_folder)
+            self.files = self.fetcher.list_split_objects(
+                self.parents, split=self.split_folder
+            )
 
     @staticmethod
     def init_logger():
-        os.makedirs('logs', exist_ok=True)
-        log_file = f'logs/training_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
+        os.makedirs("logs", exist_ok=True)
+        log_file = f"logs/training_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
         logging.basicConfig(
             level=logging.INFO,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            handlers=[
-                logging.FileHandler(log_file),
-                logging.StreamHandler()
-            ]
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            handlers=[logging.FileHandler(log_file), logging.StreamHandler()],
         )
         logger = logging.getLogger(__name__)
 
