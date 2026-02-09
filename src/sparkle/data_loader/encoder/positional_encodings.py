@@ -1,8 +1,18 @@
+import os
 import torch
 import torch.nn as nn
 
+
+def remap_path(s3_path):
+    """Remap S3-style paths to local paths"""
+    if s3_path and s3_path.startswith("netml-s3-bucket/"):
+        return os.path.join(os.path.expanduser("~/sparkle-finetuning"), s3_path)
+    return s3_path
+
+
 def parse_line_to_list(line):
     return [int(x) for x in line.strip().split()]
+
 
 def pad_sequences(sequences, max_len, padding_value=0):
     padded_sequences = []
@@ -12,11 +22,12 @@ def pad_sequences(sequences, max_len, padding_value=0):
     return padded_sequences
 
 
-def field_pos_safe(filename, start_idx, end_idx, device='cpu'):
+def field_pos_safe(filename, start_idx, end_idx, device="cpu"):
     """
     Safe version of field_pos. Returns a padded tensor even if the file is missing
     or indices are out of range.
     """
+    filename = remap_path(filename)
     try:
         with open(filename, "r") as file:
             lines = file.readlines()
@@ -26,7 +37,9 @@ def field_pos_safe(filename, start_idx, end_idx, device='cpu'):
 
     n = len(lines)
     if start_idx >= n:
-        print(f"Warning: start_idx {start_idx} >= number of lines {n} in file {filename}")
+        print(
+            f"Warning: start_idx {start_idx} >= number of lines {n} in file {filename}"
+        )
         return torch.zeros((1, 1), dtype=torch.long, device=device)
 
     end_idx = min(end_idx, n)
@@ -44,11 +57,12 @@ def field_pos_safe(filename, start_idx, end_idx, device='cpu'):
     return torch.tensor(padded_sequences, dtype=torch.long, device=device)
 
 
-def header_pos_safe(filename, start_idx, end_idx, device='cpu'):
+def header_pos_safe(filename, start_idx, end_idx, device="cpu"):
     """
     Safe version of header_pos. Returns a padded tensor even if the file is missing
     or indices are out of range.
     """
+    filename = remap_path(filename)
     try:
         with open(filename, "r") as file:
             lines = file.readlines()
@@ -58,7 +72,9 @@ def header_pos_safe(filename, start_idx, end_idx, device='cpu'):
 
     n = len(lines)
     if start_idx >= n:
-        print(f"Warning: start_idx {start_idx} >= number of lines {n} in file {filename}")
+        print(
+            f"Warning: start_idx {start_idx} >= number of lines {n} in file {filename}"
+        )
         return torch.zeros((1, 1), dtype=torch.long, device=device)
 
     end_idx = min(end_idx, n)
@@ -75,6 +91,7 @@ def header_pos_safe(filename, start_idx, end_idx, device='cpu'):
 
     return torch.tensor(padded_sequences, dtype=torch.long, device=device)
 
+
 # def header_pos(filename, chunk_start, chunk_end):
 #     try:
 #         with open(filename, "r") as file:
@@ -84,11 +101,11 @@ def header_pos_safe(filename, start_idx, end_idx, device='cpu'):
 #         exit()
 
 #     token_header_pos_emb_list = []
-    
+
 #     for line in lines:
 #         indices = parse_line_to_list(line)
 #         token_header_pos_emb_list.append(indices)
-    
+
 #     max_len = max(len(seq) for seq in token_header_pos_emb_list)
 #     max_len += 2
 #     padded_sequences = pad_sequences(token_header_pos_emb_list, max_len)
@@ -107,11 +124,11 @@ def header_pos_safe(filename, start_idx, end_idx, device='cpu'):
 #         exit()
 
 #     token_field_pos_emb_list = []
-    
+
 #     for line in lines:
 #         indices = parse_line_to_list(line)
 #         token_field_pos_emb_list.append(indices)
-    
+
 #     max_len = max(len(seq) for seq in token_field_pos_emb_list)
 #     max_len += 2
 #     padded_sequences = pad_sequences(token_field_pos_emb_list, max_len)
@@ -120,5 +137,3 @@ def header_pos_safe(filename, start_idx, end_idx, device='cpu'):
 
 #     # Slice the tensor based on chunk_start and chunk_end
 #     return indices_tensor[chunk_start:chunk_end]
-
-
