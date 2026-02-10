@@ -15,7 +15,7 @@ INPUT_MANIFEST = config.manifest_path
 project_root = get_project_root()
 OUTPUT_MANIFEST = os.path.join(project_root, "manifest", "local_manifest.json")
 
-LOCAL_BASE = os.path.join(os.path.dirname(project_root), "sparkle-finetuning")
+LOCAL_BASE = os.path.join(os.path.expanduser("~"), "sparkle-datavol", "local")
 
 fs = s3fs.S3FileSystem()
 

@@ -2,6 +2,7 @@ import json
 import os
 from pathlib import Path
 
+import torch
 from s3fs import S3FileSystem
 from torch.utils.data import Dataset
 
@@ -15,18 +16,29 @@ from sparkle.data_loader.encoder.positional_encodings import (
 def remap_path(s3_path):
     """Remap S3-style paths to local paths"""
     if s3_path and s3_path.startswith("netml-s3-bucket/"):
-        return os.path.join(os.path.expanduser("~/sparkle-finetuning"), s3_path)
+        return os.path.join(os.path.expanduser("~/sparkle-datavol/local"), s3_path)
     return s3_path
 
 
 class PacketSequenceDataset(Dataset):
     def __init__(
-        self, config: Config, manifest_path, tokenizer, chunk_size, max_files=None
+        self,
+        config: Config,
+        manifest_path,
+        tokenizer,
+        chunk_size,
+        max_files=None,
+        device=None,
     ):
         self.tokenizer = tokenizer
         self.config = config
         self.manifest_path = manifest_path
         self.max_files = max_files
+        self.device = (
+            device
+            if device is not None
+            else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        )
         self.files = self._load_manifest()
         self.fs = S3FileSystem()
 
@@ -95,8 +107,12 @@ class PacketSequenceDataset(Dataset):
         chunk_end = min((line_idx + 1) * self.chunk_size, token_ids.size(0))
         chunk = token_ids[chunk_start:chunk_end]
 
-        field_position = field_pos_safe(field_path, chunk_start, chunk_end)
-        header_position = header_pos_safe(header_path, chunk_start, chunk_end)
+        field_position = field_pos_safe(
+            field_path, chunk_start, chunk_end, device="cpu"
+        )
+        header_position = header_pos_safe(
+            header_path, chunk_start, chunk_end, device="cpu"
+        )
 
         max_model_len = self.config.max_len
 

@@ -19,7 +19,7 @@ from torch.utils.data import DataLoader
 def remap_path(s3_path):
     """Remap S3-style paths to local paths"""
     if s3_path and s3_path.startswith("netml-s3-bucket/"):
-        return os.path.join(os.path.expanduser("~/sparkle-finetuning"), s3_path)
+        return os.path.join(os.path.expanduser("~/sparkle-datavol/local"), s3_path)
     return s3_path
 
 
@@ -526,7 +526,7 @@ if __name__ == "__main__":
     EVAL_MANIFEST_PATH = os.path.join(
         get_project_root(), "manifest", "eval_manifest.json"
     )
-    MAX_SAMPLES = 1000
+    MAX_SAMPLES = 10
     MAX_FILES = 2  # Limit to first 2 files from manifest
     OUTPUT_JSON_PATH = None
     LOG_DIR = os.path.join(get_project_root(), "logs")
