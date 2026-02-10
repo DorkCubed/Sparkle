@@ -2,7 +2,7 @@ import logging
 import os
 from datetime import datetime
 
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""
 # os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 # os.environ["TORCH_USE_CUDA_DSA"] = "1"
 
@@ -13,30 +13,33 @@ from tqdm import tqdm
 
 from sparkle.configs.config import Config
 from sparkle.data_loader.data_loader import DataModule
+from sparkle.utils import get_project_root
 from sparkle.model.embedding import PacketEmbedding, FlowEmbedding
 from sparkle.model.flow_encoder import FlowLevelEncoder
 from sparkle.model.packet_encoder import PacketLevelEncoder
 
 # Configure logging
-os.makedirs('logs', exist_ok=True)
-log_file = f'logs/training_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
+os.makedirs("logs", exist_ok=True)
+log_file = f"logs/training_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(log_file),
-        logging.StreamHandler()
-    ]
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.FileHandler(log_file), logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
 
 
 class PacketLevelTrainer:
     def __init__(self, packet_embedding, packet_encoder, flow_embedding, flow_encoder):
-        data_module = DataModule()
         self.config = Config()
         self.vocab = self._init_vocab()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # Override manifest path to use manifest_5000.json
+        self.config.manifest_path = os.path.join(
+            get_project_root(), "manifest", "manifest_5000.json"
+        )
+
         self.skipped = 0
 
         self.packet_embedding = packet_embedding.to(self.device)
@@ -44,11 +47,16 @@ class PacketLevelTrainer:
         self.flow_embedding = flow_embedding.to(self.device)
         self.flow_encoder = flow_encoder.to(self.device)
 
-        self.train_loader = data_module.get_loader()
+        data_module = DataModule(device=self.device, config=self.config)
+        self.train_loader, self.train_loader_len = data_module.get_batches_with_length()
 
         self.optimizer = optim.Adam(
-            list(self.packet_embedding.parameters()) + list(self.flow_embedding.parameters()) + list(
-                self.packet_encoder.parameters()) + list(self.flow_encoder.parameters()), lr=self.config.learning_rate)
+            list(self.packet_embedding.parameters())
+            + list(self.flow_embedding.parameters())
+            + list(self.packet_encoder.parameters())
+            + list(self.flow_encoder.parameters()),
+            lr=self.config.learning_rate,
+        )
         criterion = nn.CrossEntropyLoss()
 
         self.step_successful = False
@@ -69,9 +77,9 @@ class PacketLevelTrainer:
 
     def _init_vocab(self):
         vocab = {}
-        with open(self.config.tokenizer_path, 'r', encoding='utf-8') as f:
+        with open(self.config.tokenizer_path, "r", encoding="utf-8") as f:
             for line in f:
-                token, token_id = line.strip().split('\t')
+                token, token_id = line.strip().split("\t")
                 vocab[token] = int(token_id)
 
         return vocab
@@ -106,7 +114,9 @@ class PacketLevelTrainer:
     def validate_indices(tensors, names, limits):
         for t, name, limit in zip(tensors, names, limits):
             if t.min() < 0 or t.max() >= limit:
-                raise ValueError(f"{name} index out of bounds: min={t.min()}, max={t.max()}, limit={limit}")
+                raise ValueError(
+                    f"{name} index out of bounds: min={t.min()}, max={t.max()}, limit={limit}"
+                )
 
     @staticmethod
     def is_cuda_oom(e: Exception) -> bool:
@@ -121,14 +131,13 @@ class PacketLevelTrainer:
             logger.error("process_encodings called with empty encodings list.")
             return None
 
-
         direction_file_path = entry.get("direction")
         if direction_file_path is None:
             logger.error("Entry missing required key 'direction'.")
             return None
 
         try:
-            with open(direction_file_path, 'r', encoding="utf-8") as f:
+            with open(direction_file_path, "r", encoding="utf-8") as f:
                 direction_data = [int(line.strip()) for line in f]
         except Exception:
             return None
@@ -173,10 +182,7 @@ class PacketLevelTrainer:
 
         return total_loss / max(total_chunks, 1)
 
-
-
     def backward_and_optimize(self, accumulated_mlm_loss, accumulated_sfbo_loss):
-
         total_accumulated_loss = accumulated_mlm_loss + accumulated_sfbo_loss
 
         self.optimizer.zero_grad()
@@ -193,12 +199,14 @@ class PacketLevelTrainer:
 
         progress_bar = tqdm(
             self.train_loader,
-            total=len(self.train_loader),
+            total=self.train_loader_len,
             desc=f"Epoch {epoch + 1}",
-            leave=False
+            leave=False,
         )
 
-        for i, (packet_sequences, field_position, header_position, entry) in enumerate(progress_bar):
+        for i, (packet_sequences, field_position, header_position, entry) in enumerate(
+            progress_bar
+        ):
             # try:
             #     entry = {k: (v[0] if isinstance(v, list) else v) for k, v in entry.items()}
             #     packet_sequences = packet_sequences.squeeze(0).to(self.device)
@@ -229,12 +237,19 @@ class PacketLevelTrainer:
             #     self.skipped += 1
             #     continue
 
-
             try:
-                entry = {k: (v[0] if isinstance(v, list) else v) for k, v in entry.items()}
-                packet_sequences = self.safe_prepare(packet_sequences, "packet_sequences", self.device)
-                field_position = self.safe_prepare(field_position, "field_position", self.device)
-                header_position = self.safe_prepare(header_position, "header_position", self.device)
+                entry = {
+                    k: (v[0] if isinstance(v, list) else v) for k, v in entry.items()
+                }
+                packet_sequences = self.safe_prepare(
+                    packet_sequences, "packet_sequences", self.device
+                )
+                field_position = self.safe_prepare(
+                    field_position, "field_position", self.device
+                )
+                header_position = self.safe_prepare(
+                    header_position, "header_position", self.device
+                )
 
                 current_packet_file = entry.get("packet")
                 if current_packet_file is None:
@@ -247,9 +262,14 @@ class PacketLevelTrainer:
 
             # Handle file transitions safely
             try:
-                if self.previous_entry is not None and current_packet_file != self.previous_packet_file:
+                if (
+                    self.previous_entry is not None
+                    and current_packet_file != self.previous_packet_file
+                ):
                     if self.all_packet_encodings:
-                        mpm_loss = self.process_encodings(self.all_packet_encodings, self.previous_entry)
+                        mpm_loss = self.process_encodings(
+                            self.all_packet_encodings, self.previous_entry
+                        )
                         if mpm_loss is not None:
                             self.optimizer.zero_grad()
                             mpm_loss.backward()
@@ -265,12 +285,13 @@ class PacketLevelTrainer:
                 self.all_packet_encodings = []
                 self.total_packet_enc_loss = 0
                 self.skipped += 1
-                
 
             try:
                 # Packet-level forward pass
                 mlm_loss, sfbo_loss, encoded_packets_mean = self.packet_encoder(
-                    packet_sequences, field_pos=field_position, header_pos=header_position
+                    packet_sequences,
+                    field_pos=field_position,
+                    header_pos=header_position,
                 )
 
                 self.accumulated_mlm_loss += mlm_loss
@@ -278,7 +299,9 @@ class PacketLevelTrainer:
                 self.batch_counter += 1
 
                 if self.batch_counter == self.accumulation_steps:
-                    self.backward_and_optimize(self.accumulated_mlm_loss, self.accumulated_sfbo_loss)
+                    self.backward_and_optimize(
+                        self.accumulated_mlm_loss, self.accumulated_sfbo_loss
+                    )
 
                 self.all_packet_encodings.append(encoded_packets_mean.detach().cpu())
                 self.step_successful = True
@@ -300,20 +323,17 @@ class PacketLevelTrainer:
                     self.skipped += 1
                     continue
                 continue
-                
 
             self.previous_entry = entry
 
-
-            progress_bar.set_postfix({
-                "skipped": self.skipped
-            })
-
+            progress_bar.set_postfix({"skipped": self.skipped})
 
         # Final file after loop
         try:
             if self.all_packet_encodings and self.previous_entry["packet"]:
-                final_loss = self.process_encodings(self.all_packet_encodings, self.previous_entry)
+                final_loss = self.process_encodings(
+                    self.all_packet_encodings, self.previous_entry
+                )
                 if final_loss is not None:
                     self.optimizer.zero_grad()
                     final_loss.backward()
@@ -350,7 +370,9 @@ class PacketLevelTrainer:
         self.accumulated_mlm_loss = checkpoint.get("accumulated_mlm_loss", 0.0)
         self.accumulated_sfbo_loss = checkpoint.get("accumulated_sfbo_loss", 0.0)
 
-        logger.info(f"Checkpoint loaded from {checkpoint_path} (epoch {checkpoint['epoch'] + 1})")
+        logger.info(
+            f"Checkpoint loaded from {checkpoint_path} (epoch {checkpoint['epoch'] + 1})"
+        )
         return checkpoint["epoch"]
 
 
@@ -358,9 +380,16 @@ class ExperimentRunner:
     def __init__(self):
         logger.info("Initializing ExperimentRunner...")
         self.config = Config()
-        data_module = DataModule()
-        self.tokenizer = data_module.get_tokenizer()
+
+        # Override manifest path to use manifest_5000.json
+        self.config.manifest_path = os.path.join(
+            get_project_root(), "manifest", "manifest_5000.json"
+        )
+        logger.info(f"Using manifest: {self.config.manifest_path}")
+
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        data_module = DataModule(device=self.device, config=self.config)
+        self.tokenizer = data_module.get_tokenizer()
         logger.info(f"Using device: {self.device}")
         if torch.cuda.is_available():
             logger.info(f"CUDA device name: {torch.cuda.get_device_name(0)}")
@@ -368,34 +397,59 @@ class ExperimentRunner:
 
     def load_vocab(self):
         vocab = {}
-        with open(self.config.tokenizer_path, 'r', encoding='utf-8') as f:
+        with open(self.config.tokenizer_path, "r", encoding="utf-8") as f:
             for line in f:
-                token, token_id = line.strip().split('\t')
+                token, token_id = line.strip().split("\t")
                 vocab[token] = int(token_id)
         return vocab
 
     def run(self):
         print("-" * 30)
-        print(f"CUDA_LAUNCH_BLOCKING: {os.environ.get('CUDA_LAUNCH_BLOCKING', 'Not Set')}")
-        print(f"TORCH_USE_CUDA_DSA:   {os.environ.get('TORCH_USE_CUDA_DSA', 'Not Set')}")
+        print(
+            f"CUDA_LAUNCH_BLOCKING: {os.environ.get('CUDA_LAUNCH_BLOCKING', 'Not Set')}"
+        )
+        print(
+            f"TORCH_USE_CUDA_DSA:   {os.environ.get('TORCH_USE_CUDA_DSA', 'Not Set')}"
+        )
         print("-" * 30)
 
         logger.info("Starting model training...")
         vocab = self.load_vocab()
         logger.info(f"Vocabulary size: {len(vocab)}")
 
-        packet_embedding = PacketEmbedding(self.config.vocab_size, max_len=self.config.max_len,
-                                           embed_dim=self.config.embed_dim, dropout=self.config.dropout).to(self.device)
-        packet_encoder = PacketLevelEncoder(self.config.vocab_size, self.config.embed_dim, self.config.max_len,
-                                            self.config.num_heads, self.config.num_layers, self.config.dropout).to(
-            self.device)
-        flow_embedding = FlowEmbedding(self.config.embed_dim, self.config.max_flow_length, self.config.dropout,
-                                       vocab).to(self.device)
-        flow_encoder = FlowLevelEncoder(self.config.embed_dim, self.config.num_layers, self.config.num_heads,
-                                        self.config.dropout, vocab, self.config.max_flow_length,
-                                        self.config.mask_prob).to(self.device)
+        packet_embedding = PacketEmbedding(
+            self.config.vocab_size,
+            max_len=self.config.max_len,
+            embed_dim=self.config.embed_dim,
+            dropout=self.config.dropout,
+        ).to(self.device)
+        packet_encoder = PacketLevelEncoder(
+            self.config.vocab_size,
+            self.config.embed_dim,
+            self.config.max_len,
+            self.config.num_heads,
+            self.config.num_layers,
+            self.config.dropout,
+        ).to(self.device)
+        flow_embedding = FlowEmbedding(
+            self.config.embed_dim,
+            self.config.max_flow_length,
+            self.config.dropout,
+            vocab,
+        ).to(self.device)
+        flow_encoder = FlowLevelEncoder(
+            self.config.embed_dim,
+            self.config.num_layers,
+            self.config.num_heads,
+            self.config.dropout,
+            vocab,
+            self.config.max_flow_length,
+            self.config.mask_prob,
+        ).to(self.device)
 
-        trainer = PacketLevelTrainer(packet_embedding, packet_encoder, flow_embedding, flow_encoder)
+        trainer = PacketLevelTrainer(
+            packet_embedding, packet_encoder, flow_embedding, flow_encoder
+        )
 
         print("Loaded trainer.")
 
