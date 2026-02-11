@@ -45,18 +45,26 @@ class PacketLevelEncoder(nn.Module):
         span_masks = span_masks.to(device, non_blocking=True)
 
         # Track which positions were masked for accuracy calculation
-        mlm_masked_positions = (masked_packets != packet_sequences) & (packet_sequences != 0)
-        sfbo_masked_positions = (span_masks != packet_sequences) & (packet_sequences != 0)
+        mlm_masked_positions = (masked_packets != packet_sequences) & (
+            packet_sequences != 0
+        )
+        sfbo_masked_positions = (span_masks != packet_sequences) & (
+            packet_sequences != 0
+        )
 
         # We embed and encode for MLM
         mask_emb = self.embedding(masked_packets, field_pos, header_pos).squeeze(0)
         mask_encoded_packets = self.encoder(mask_emb)
-        mlm_loss = self.compute_mlm_loss(mask_encoded_packets, packet_sequences)
+        mlm_loss = self.compute_mlm_loss(
+            mask_encoded_packets, packet_sequences, mlm_masked_positions
+        )
 
         # We embed and encode for SFBO
         span_emb = self.embedding(span_masks, field_pos, header_pos).squeeze(0)
         span_encoded_packets = self.encoder(span_emb)
-        sfbo_loss = self.compute_sfbo_loss(span_encoded_packets, packet_sequences)
+        sfbo_loss = self.compute_sfbo_loss(
+            span_encoded_packets, packet_sequences, sfbo_masked_positions
+        )
 
         # We DETACH here. This ensures this purely informational tensor
         # does not keep the computation graph alive.
@@ -87,25 +95,30 @@ class PacketLevelEncoder(nn.Module):
             sfbo_masked_positions,
         )
 
-    def compute_mlm_loss(self, encoded_packets, packet_sequences):
+    def compute_mlm_loss(self, encoded_packets, packet_sequences, mlm_mask):
         mlm_logits = self.mlm_predictor(encoded_packets)
-        # print("mlm logits: ", mlm_logits.shape)
-        # print(mlm_logits.view(-1, mlm_logits.size(-1)).shape, (packet_sequences.view(-1)).shape)
-        mlm_loss = F.cross_entropy(
-            mlm_logits.reshape(-1, mlm_logits.size(-1)), packet_sequences.reshape(-1)
-        )
-        return mlm_loss
 
-    def compute_sfbo_loss(self, span_encoded_packets, packet_sequences):
-        sfbo_loss = 0
-        sfbo_logits = self.sfbo_predictor(span_encoded_packets)
-        # print("sfbo log: ", sfbo_logits.shape)
-        flat_logits = sfbo_logits.reshape(-1, sfbo_logits.size(-1))
-        # print("flat logits: ", flat_logits.shape)
+        flat_logits = mlm_logits.reshape(-1, mlm_logits.size(-1))
         flat_targets = packet_sequences.reshape(-1)
-        sfbo_loss += F.cross_entropy(flat_logits, flat_targets)
+        flat_mask = mlm_mask.reshape(-1)
 
-        return sfbo_loss
+        masked_logits = flat_logits[flat_mask]
+        masked_targets = flat_targets[flat_mask]
+
+        loss = F.cross_entropy(masked_logits, masked_targets)
+        return loss
+
+    def compute_sfbo_loss(self, span_encoded_packets, packet_sequences, sfbo_mask):
+        sfbo_logits = self.sfbo_predictor(span_encoded_packets)
+        flat_logits = sfbo_logits.reshape(-1, sfbo_logits.size(-1))
+        flat_targets = packet_sequences.reshape(-1)
+        flat_mask = sfbo_mask.reshape(-1)
+
+        masked_logits = flat_logits[flat_mask]
+        masked_targets = flat_targets[flat_mask]
+
+        loss = F.cross_entropy(masked_logits, masked_targets)
+        return loss
 
 
 def apply_mlm_sfbo_masking(
