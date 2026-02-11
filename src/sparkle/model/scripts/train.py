@@ -35,9 +35,9 @@ class PacketLevelTrainer:
         self.vocab = self._init_vocab()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        # Override manifest path to use manifest_5000.json
+        # Override manifest path to use manifest_10.json
         self.config.manifest_path = os.path.join(
-            get_project_root(), "manifest", "manifest_5000.json"
+            get_project_root(), "manifest", "manifest_10.json"
         )
 
         self.skipped = 0
@@ -381,9 +381,9 @@ class ExperimentRunner:
         logger.info("Initializing ExperimentRunner...")
         self.config = Config()
 
-        # Override manifest path to use manifest_5000.json
+        # Override manifest path to use manifest_10.json
         self.config.manifest_path = os.path.join(
-            get_project_root(), "manifest", "manifest_5000.json"
+            get_project_root(), "manifest", "manifest_10.json"
         )
         logger.info(f"Using manifest: {self.config.manifest_path}")
 
