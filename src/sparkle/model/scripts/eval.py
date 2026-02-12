@@ -15,7 +15,8 @@ from sparkle.model.flow_encoder import FlowLevelEncoder
 from sparkle.model.packet_encoder import PacketLevelEncoder
 from torch.utils.data import DataLoader
 
-
+# Base path for S3 remapping - eval mode uses sparkle-finetuning
+EVAL_BASE_PATH = "~/sparkle-finetuning"
 
 
 def remap_path(s3_path):
@@ -107,6 +108,7 @@ class PacketLevelEvaluator:
             tokenizer=tokenizer,
             chunk_size=self.config.chunk_size,
             max_files=self.max_files,
+            base_path=EVAL_BASE_PATH,
         )
 
         return DataLoader(

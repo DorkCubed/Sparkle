@@ -28,7 +28,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
+# Base path for S3 remapping - training mode uses sparkle-datavol
+TRAIN_BASE_PATH = "~/sparkle-datavol/local"
 
 
 class PacketLevelTrainer:
@@ -48,7 +49,7 @@ class PacketLevelTrainer:
         self.flow_embedding = flow_embedding.to(self.device)
         self.flow_encoder = flow_encoder.to(self.device)
 
-        data_module = DataModule(device=self.device, config=self.config)
+        data_module = DataModule(device=self.device, config=self.config, base_path=TRAIN_BASE_PATH)
         self.train_loader, self.train_loader_len = data_module.get_batches_with_length()
 
         self.optimizer = optim.Adam(
@@ -386,7 +387,7 @@ class ExperimentRunner:
         logger.info(f"Using manifest: {self.config.manifest_path}")
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        data_module = DataModule(device=self.device, config=self.config)
+        data_module = DataModule(device=self.device, config=self.config, base_path=TRAIN_BASE_PATH)
         self.tokenizer = data_module.get_tokenizer()
         logger.info(f"Using device: {self.device}")
         if torch.cuda.is_available():
