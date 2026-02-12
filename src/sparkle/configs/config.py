@@ -51,7 +51,7 @@ class Config:
         self.mask_prob = 0.15
         self.num_epochs = 1
         self.max_len = 578  # 512
-        self.chunk_size = 4  # earlier batch_size_1
+        self.chunk_size = 16  # earlier batch_size_1
         self.learning_rate = 0.001
 
     def initialize_data_fetcher(self):
