@@ -470,6 +470,38 @@ if __name__ == "__main__":
         exit(0)
     
     print("\nRunning in training mode...")
-    print("="*50 + "\n")
-    runner = ExperimentRunner()
-    runner.run()
+    print("="*50)
+    
+    # Ask for number of epochs
+    print("\nTraining Configuration:")
+    print("-" * 30)
+    
+    while True:
+        epochs_input = input("Enter number of epochs (default: 1): ").strip()
+        if epochs_input == "":
+            num_epochs = 1
+            break
+        try:
+            num_epochs = int(epochs_input)
+            if num_epochs > 0:
+                break
+            else:
+                print("Please enter a positive number.")
+        except ValueError:
+            print("Invalid input. Please enter a number.")
+    
+    print("-" * 30)
+    print(f"Configuration: epochs={num_epochs}")
+    print()
+    
+    # Override the config
+    import sys
+    original_num_epochs = None
+    
+    def run_with_epochs():
+        runner = ExperimentRunner()
+        # Override num_epochs after config is loaded
+        runner.config.num_epochs = num_epochs
+        runner.run()
+    
+    run_with_epochs()
