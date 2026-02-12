@@ -541,14 +541,52 @@ if __name__ == "__main__":
     print("\nRunning in evaluation mode...")
     print("="*50 + "\n")
     
+    # Interactive prompts for evaluation parameters
+    print("\nEvaluation Configuration:")
+    print("-" * 30)
+    
+    # Ask for max_samples
+    while True:
+        samples_input = input("Enter max samples to evaluate (default: 1000): ").strip()
+        if samples_input == "":
+            MAX_SAMPLES = 1000
+            break
+        try:
+            MAX_SAMPLES = int(samples_input)
+            if MAX_SAMPLES > 0:
+                break
+            else:
+                print("Please enter a positive number.")
+        except ValueError:
+            print("Invalid input. Please enter a number.")
+    
+    # Ask for max_files
+    while True:
+        files_input = input("Enter max files to evaluate (default: 100, 0 for all files): ").strip()
+        if files_input == "":
+            MAX_FILES = 100
+            break
+        try:
+            MAX_FILES = int(files_input)
+            if MAX_FILES >= 0:
+                if MAX_FILES == 0:
+                    MAX_FILES = None  # 0 means no limit
+                break
+            else:
+                print("Please enter a non-negative number.")
+        except ValueError:
+            print("Invalid input. Please enter a number.")
+    
+    print("-" * 30)
+    print(f"Configuration: max_samples={MAX_SAMPLES}, max_files={MAX_FILES if MAX_FILES else 'unlimited'}")
+    print()
+    
     CHECKPOINT_PATH = os.path.join(
         get_project_root(), "checkpoints", "checkpoint_1.pth"
     )
     EVAL_MANIFEST_PATH = os.path.join(
         get_project_root(), "manifest", "eval_manifest.json"
     )
-    MAX_SAMPLES = 1000
-    MAX_FILES = 100  # Limit to first 100 files from manifest
     OUTPUT_JSON_PATH = None
     LOG_DIR = os.path.join(get_project_root(), "logs")
 
