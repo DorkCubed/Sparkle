@@ -472,10 +472,35 @@ if __name__ == "__main__":
     print("\nRunning in training mode...")
     print("="*50)
     
-    # Ask for number of epochs
+    # Ask for manifest selection
     print("\nTraining Configuration:")
     print("-" * 30)
     
+    # List available manifests
+    available_manifests = {
+        "1": "manifest_10.json",
+        "2": "manifest_100.json",
+        "3": "manifest.json",
+        "4": "eval_manifest.json"
+    }
+    
+    print("\nAvailable manifests:")
+    for key, manifest in available_manifests.items():
+        print(f"  {key}. {manifest}")
+    
+    while True:
+        manifest_input = input("\nSelect manifest (1-4, default: 1): ").strip()
+        if manifest_input == "":
+            manifest_file = available_manifests["1"]
+            break
+        if manifest_input in available_manifests:
+            manifest_file = available_manifests[manifest_input]
+            break
+        print("Invalid selection. Please enter 1, 2, 3, or 4.")
+    
+    print(f"Selected: {manifest_file}")
+    
+    # Ask for number of epochs
     while True:
         epochs_input = input("Enter number of epochs (default: 1): ").strip()
         if epochs_input == "":
@@ -491,17 +516,17 @@ if __name__ == "__main__":
             print("Invalid input. Please enter a number.")
     
     print("-" * 30)
-    print(f"Configuration: epochs={num_epochs}")
+    print(f"Configuration: manifest={manifest_file}, epochs={num_epochs}")
     print()
     
     # Override the config
-    import sys
-    original_num_epochs = None
-    
-    def run_with_epochs():
+    def run_with_config():
         runner = ExperimentRunner()
-        # Override num_epochs after config is loaded
+        # Override manifest and num_epochs after config is loaded
+        runner.config.manifest_path = os.path.join(
+            get_project_root(), "manifest", manifest_file
+        )
         runner.config.num_epochs = num_epochs
         runner.run()
     
-    run_with_epochs()
+    run_with_config()
