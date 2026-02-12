@@ -33,15 +33,22 @@ TRAIN_BASE_PATH = "~/sparkle-datavol/local"
 
 
 class PacketLevelTrainer:
-    def __init__(self, packet_encoder, flow_embedding, flow_encoder):
+    def __init__(self, packet_encoder, flow_embedding, flow_encoder, manifest_path=None, num_epochs=None):
         self.config = Config()
         self.vocab = self._init_vocab()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        # Override manifest path to use manifest_10.json
-        self.config.manifest_path = os.path.join(
-            get_project_root(), "manifest", "manifest_10.json"
-        )
+        # Override manifest path if provided, otherwise use default
+        if manifest_path:
+            self.config.manifest_path = manifest_path
+        else:
+            self.config.manifest_path = os.path.join(
+                get_project_root(), "manifest", "manifest_10.json"
+            )
+        
+        # Override num_epochs if provided
+        if num_epochs:
+            self.config.num_epochs = num_epochs
 
         self.skipped = 0
 
@@ -376,15 +383,25 @@ class PacketLevelTrainer:
 
 
 class ExperimentRunner:
-    def __init__(self):
+    def __init__(self, manifest_path=None, num_epochs=None):
         logger.info("Initializing ExperimentRunner...")
         self.config = Config()
 
-        # Override manifest path to use manifest_10.json
-        self.config.manifest_path = os.path.join(
-            get_project_root(), "manifest", "manifest_10.json"
-        )
-        logger.info(f"Using manifest: {self.config.manifest_path}")
+        # Override manifest path if provided
+        if manifest_path:
+            self.config.manifest_path = manifest_path
+            logger.info(f"Using custom manifest: {self.config.manifest_path}")
+        else:
+            # Override manifest path to use manifest_10.json
+            self.config.manifest_path = os.path.join(
+                get_project_root(), "manifest", "manifest_10.json"
+            )
+            logger.info(f"Using default manifest: {self.config.manifest_path}")
+        
+        # Override num_epochs if provided
+        if num_epochs:
+            self.config.num_epochs = num_epochs
+            logger.info(f"Using custom epochs: {self.config.num_epochs}")
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         data_module = DataModule(device=self.device, config=self.config, base_path=TRAIN_BASE_PATH)
@@ -441,7 +458,9 @@ class ExperimentRunner:
         ).to(self.device)
 
         trainer = PacketLevelTrainer(
-            packet_encoder, flow_embedding, flow_encoder
+            packet_encoder, flow_embedding, flow_encoder,
+            manifest_path=self.config.manifest_path,
+            num_epochs=self.config.num_epochs
         )
 
         print("Loaded trainer.")
@@ -519,14 +538,7 @@ if __name__ == "__main__":
     print(f"Configuration: manifest={manifest_file}, epochs={num_epochs}")
     print()
     
-    # Override the config
-    def run_with_config():
-        runner = ExperimentRunner()
-        # Override manifest and num_epochs after config is loaded
-        runner.config.manifest_path = os.path.join(
-            get_project_root(), "manifest", manifest_file
-        )
-        runner.config.num_epochs = num_epochs
-        runner.run()
-    
-    run_with_config()
+    # Create runner with custom manifest and epochs
+    manifest_path = os.path.join(get_project_root(), "manifest", manifest_file)
+    runner = ExperimentRunner(manifest_path=manifest_path, num_epochs=num_epochs)
+    runner.run()
