@@ -16,7 +16,7 @@ from sparkle.data_loader.encoder.positional_encodings import (
 def remap_path(s3_path):
     """Remap S3-style paths to local paths"""
     if s3_path and s3_path.startswith("netml-s3-bucket/"):
-        return os.path.join(os.path.expanduser("~/sparkle-finetuning"), s3_path)
+        return os.path.join(os.path.expanduser("~/sparkle-datavol/local"), s3_path)
     return s3_path
 
 

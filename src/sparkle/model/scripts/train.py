@@ -14,7 +14,7 @@ from tqdm import tqdm
 from sparkle.configs.config import Config
 from sparkle.data_loader.data_loader import DataModule
 from sparkle.utils import get_project_root
-from sparkle.model.embedding import PacketEmbedding, FlowEmbedding
+from sparkle.model.embedding import FlowEmbedding
 from sparkle.model.flow_encoder import FlowLevelEncoder
 from sparkle.model.packet_encoder import PacketLevelEncoder
 
@@ -30,19 +30,18 @@ logger = logging.getLogger(__name__)
 
 
 class PacketLevelTrainer:
-    def __init__(self, packet_embedding, packet_encoder, flow_embedding, flow_encoder):
+    def __init__(self, packet_encoder, flow_embedding, flow_encoder):
         self.config = Config()
         self.vocab = self._init_vocab()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        # Override manifest path to use manifest_100.json
+        # Override manifest path to use manifest_10.json
         self.config.manifest_path = os.path.join(
-            get_project_root(), "manifest", "manifest_100.json"
+            get_project_root(), "manifest", "manifest_10.json"
         )
 
         self.skipped = 0
 
-        self.packet_embedding = packet_embedding.to(self.device)
         self.packet_encoder = packet_encoder.to(self.device)
         self.flow_embedding = flow_embedding.to(self.device)
         self.flow_encoder = flow_encoder.to(self.device)
@@ -51,8 +50,7 @@ class PacketLevelTrainer:
         self.train_loader, self.train_loader_len = data_module.get_batches_with_length()
 
         self.optimizer = optim.Adam(
-            list(self.packet_embedding.parameters())
-            + list(self.flow_embedding.parameters())
+            list(self.flow_embedding.parameters())
             + list(self.packet_encoder.parameters())
             + list(self.flow_encoder.parameters()),
             lr=self.config.learning_rate,
@@ -347,7 +345,6 @@ class PacketLevelTrainer:
 
         state = {
             "epoch": epoch,
-            "packet_embedding": self.packet_embedding.state_dict(),
             "packet_encoder": self.packet_encoder.state_dict(),
             "flow_embedding": self.flow_embedding.state_dict(),
             "flow_encoder": self.flow_encoder.state_dict(),
@@ -361,7 +358,6 @@ class PacketLevelTrainer:
     def load_checkpoint(self, checkpoint_path):
         checkpoint = torch.load(checkpoint_path, map_location=self.device)
 
-        self.packet_embedding.load_state_dict(checkpoint["packet_embedding"])
         self.packet_encoder.load_state_dict(checkpoint["packet_encoder"])
         self.flow_embedding.load_state_dict(checkpoint["flow_embedding"])
         self.flow_encoder.load_state_dict(checkpoint["flow_encoder"])
@@ -381,9 +377,9 @@ class ExperimentRunner:
         logger.info("Initializing ExperimentRunner...")
         self.config = Config()
 
-        # Override manifest path to use manifest_100.json
+        # Override manifest path to use manifest_10.json
         self.config.manifest_path = os.path.join(
-            get_project_root(), "manifest", "manifest_100.json"
+            get_project_root(), "manifest", "manifest_10.json"
         )
         logger.info(f"Using manifest: {self.config.manifest_path}")
 
@@ -417,12 +413,6 @@ class ExperimentRunner:
         vocab = self.load_vocab()
         logger.info(f"Vocabulary size: {len(vocab)}")
 
-        packet_embedding = PacketEmbedding(
-            self.config.vocab_size,
-            max_len=self.config.max_len,
-            embed_dim=self.config.embed_dim,
-            dropout=self.config.dropout,
-        ).to(self.device)
         packet_encoder = PacketLevelEncoder(
             self.config.vocab_size,
             self.config.embed_dim,
@@ -448,7 +438,7 @@ class ExperimentRunner:
         ).to(self.device)
 
         trainer = PacketLevelTrainer(
-            packet_embedding, packet_encoder, flow_embedding, flow_encoder
+            packet_encoder, flow_embedding, flow_encoder
         )
 
         print("Loaded trainer.")

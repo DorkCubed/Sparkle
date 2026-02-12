@@ -36,7 +36,7 @@ class PacketLevelEncoder(nn.Module):
         #     nn.Linear(embed_dim, vocab_size)
         # )
 
-    def forward(self, packet_sequences, field_pos, header_pos):
+    def forward(self, packet_sequences, field_pos, header_pos, return_metrics=False):
         device = packet_sequences.device
 
         # ideally move this to DataLoader for speed
@@ -73,9 +73,10 @@ class PacketLevelEncoder(nn.Module):
             dim=0,
         )
 
-        # Removed torch.cuda.empty_cache() - it hurts performance here
+        if not return_metrics:
+            return mlm_loss, sfbo_loss, mean_encoded_packets
 
-        # Get predictions for accuracy calculation
+        # Get predictions for accuracy calculation (eval only)
         with torch.no_grad():
             mlm_logits = self.mlm_predictor(mask_encoded_packets)
             mlm_preds = torch.argmax(mlm_logits, dim=-1)
@@ -122,7 +123,7 @@ class PacketLevelEncoder(nn.Module):
 
 
 def apply_mlm_sfbo_masking(
-    packet_sequences, field_pos, mlm_prob=0.15, sfbo_prob=0.15, max_span_length=6
+    packet_sequences, field_pos, mlm_prob=0.15, max_span_length=6
 ):
     span_masks = []
     masked_sequences = []
@@ -165,7 +166,7 @@ def apply_mlm_masking(packet_seq, mlm_prob):
 
 
 def apply_sfbo_masking(
-    packet_seq, field_pos, max_span_length, padding_value, sfbo_prob=0.15
+    packet_seq, field_pos, max_span_length, padding_value
 ):
     # Move tensors to CPU for processing
     packet_seq_cpu = packet_seq.cpu()
@@ -199,13 +200,9 @@ def apply_sfbo_masking(
     # Filter span_positions to ensure they are within bounds of `packet_seq`
     span_positions = [idx for idx in span_positions if idx < len(packet_seq_cpu)]
 
-    # Apply masking with random probability
-    random_mask = torch.rand(len(span_positions))
-    sfbo_mask = random_mask < sfbo_prob
-
-    for idx, mask in zip(span_positions, sfbo_mask):
-        if mask:
-            masked_packet_seq[idx] = padding_value  # Apply the padding value
+    # Mask all positions in the selected field spans
+    for idx in span_positions:
+        masked_packet_seq[idx] = padding_value
 
     # Return the masked sequence on the CPU
     return masked_packet_seq

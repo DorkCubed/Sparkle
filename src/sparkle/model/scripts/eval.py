@@ -10,7 +10,7 @@ from sparkle.configs.config import Config
 from sparkle.utils import get_project_root
 from sparkle.data_loader.dataset import PacketSequenceDataset
 from sparkle.data_loader.tokenizer.tokenizer import Tokenizer
-from sparkle.model.embedding import PacketEmbedding, FlowEmbedding
+from sparkle.model.embedding import FlowEmbedding
 from sparkle.model.flow_encoder import FlowLevelEncoder
 from sparkle.model.packet_encoder import PacketLevelEncoder
 from torch.utils.data import DataLoader
@@ -41,7 +41,6 @@ def setup_logging(log_dir=None):
 class PacketLevelEvaluator:
     def __init__(
         self,
-        packet_embedding,
         packet_encoder,
         flow_embedding,
         flow_encoder,
@@ -54,12 +53,10 @@ class PacketLevelEvaluator:
         self.max_samples = max_samples
         self.max_files = max_files
 
-        self.packet_embedding = packet_embedding.to(self.device)
         self.packet_encoder = packet_encoder.to(self.device)
         self.flow_embedding = flow_embedding.to(self.device)
         self.flow_encoder = flow_encoder.to(self.device)
 
-        self.packet_embedding.eval()
         self.packet_encoder.eval()
         self.flow_embedding.eval()
         self.flow_encoder.eval()
@@ -147,11 +144,15 @@ class PacketLevelEvaluator:
         return isinstance(e, RuntimeError) and "out of memory" in str(e).lower()
 
     def process_encodings(self, encodings, entry):
+        logger = logging.getLogger(__name__)
+
         if not encodings:
+            logger.warning("process_encodings called with empty encodings list.")
             return None, 0
 
         direction_file_path = entry.get("direction")
         if direction_file_path is None:
+            logger.error("Entry missing required key 'direction', skipping flow-level eval.")
             return None, 0
 
         direction_file_path = remap_path(direction_file_path)
@@ -159,7 +160,8 @@ class PacketLevelEvaluator:
         try:
             with open(direction_file_path, "r", encoding="utf-8") as f:
                 direction_data = [int(line.strip()) for line in f]
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to read direction file '{direction_file_path}': {e}")
             return None, 0
 
         total_mpm_loss = 0.0
@@ -189,7 +191,10 @@ class PacketLevelEvaluator:
 
             except Exception as e:
                 if self.is_cuda_oom(e):
+                    logger.error(f"CUDA OOM during flow processing at chunk starting at {start}")
                     torch.cuda.empty_cache()
+                else:
+                    logger.error(f"Error during flow processing at chunk starting at {start}: {e}")
                 return None, 0
             finally:
                 del packet_chunk, direction_tensor, flow_embeddings
@@ -286,6 +291,7 @@ class PacketLevelEvaluator:
                         packet_sequences,
                         field_pos=field_position,
                         header_pos=header_position,
+                        return_metrics=True,
                     )
 
                     # Calculate accuracies only on masked positions
@@ -378,13 +384,6 @@ class PacketLevelEvaluator:
 
 
 def load_model_from_checkpoint(checkpoint_path, config, vocab, device):
-    packet_embedding = PacketEmbedding(
-        config.vocab_size,
-        max_len=config.max_len,
-        embed_dim=config.embed_dim,
-        dropout=config.dropout,
-    ).to(device)
-
     packet_encoder = PacketLevelEncoder(
         config.vocab_size,
         config.embed_dim,
@@ -410,7 +409,6 @@ def load_model_from_checkpoint(checkpoint_path, config, vocab, device):
 
     checkpoint = torch.load(checkpoint_path, map_location=device)
 
-    packet_embedding.load_state_dict(checkpoint["packet_embedding"])
     packet_encoder.load_state_dict(checkpoint["packet_encoder"])
     flow_embedding.load_state_dict(checkpoint["flow_embedding"])
     flow_encoder.load_state_dict(checkpoint["flow_encoder"])
@@ -420,7 +418,7 @@ def load_model_from_checkpoint(checkpoint_path, config, vocab, device):
         f"Loaded checkpoint from {checkpoint_path} (epoch {checkpoint.get('epoch', 'unknown') + 1})"
     )
 
-    return packet_embedding, packet_encoder, flow_embedding, flow_encoder
+    return packet_encoder, flow_embedding, flow_encoder
 
 
 def save_metrics_to_json(metrics, output_path):
@@ -473,13 +471,12 @@ def run_evaluation(
     logger.info(f"Vocabulary size: {len(vocab)}")
 
     logger.info("Loading model from checkpoint...")
-    packet_embedding, packet_encoder, flow_embedding, flow_encoder = (
+    packet_encoder, flow_embedding, flow_encoder = (
         load_model_from_checkpoint(checkpoint_path, config, vocab, device)
     )
 
     logger.info("Initializing evaluator...")
     evaluator = PacketLevelEvaluator(
-        packet_embedding=packet_embedding,
         packet_encoder=packet_encoder,
         flow_embedding=flow_embedding,
         flow_encoder=flow_encoder,
