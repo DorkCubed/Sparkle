@@ -29,6 +29,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+
+
 class PacketLevelTrainer:
     def __init__(self, packet_encoder, flow_embedding, flow_encoder):
         self.config = Config()
@@ -449,5 +451,24 @@ class ExperimentRunner:
 
 
 if __name__ == "__main__":
+    print("\n" + "="*50)
+    print("Sparkle Model Runner")
+    print("="*50)
+    print("\nYou are about to run: train.py")
+    
+    while True:
+        mode = input("\nDo you want to run in training mode or evaluation mode? (train/eval): ").strip().lower()
+        if mode in ["train", "eval"]:
+            break
+        print("Invalid input. Please enter 'train' or 'eval'.")
+    
+    if mode == "eval":
+        print("\nSwitching to evaluation mode...")
+        print("="*50)
+        print("\nHint: Run 'python -m src.sparkle.model.scripts.eval' instead\n")
+        exit(0)
+    
+    print("\nRunning in training mode...")
+    print("="*50 + "\n")
     runner = ExperimentRunner()
     runner.run()

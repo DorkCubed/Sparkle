@@ -16,6 +16,8 @@ from sparkle.model.packet_encoder import PacketLevelEncoder
 from torch.utils.data import DataLoader
 
 
+
+
 def remap_path(s3_path):
     """Remap S3-style paths to local paths"""
     if s3_path and s3_path.startswith("netml-s3-bucket/"):
@@ -517,6 +519,26 @@ def run_evaluation(
 
 
 if __name__ == "__main__":
+    print("\n" + "="*50)
+    print("Sparkle Model Runner")
+    print("="*50)
+    print("\nYou are about to run: eval.py")
+    
+    while True:
+        mode = input("\nDo you want to run in training mode or evaluation mode? (train/eval): ").strip().lower()
+        if mode in ["train", "eval"]:
+            break
+        print("Invalid input. Please enter 'train' or 'eval'.")
+    
+    if mode == "train":
+        print("\nSwitching to training mode...")
+        print("="*50)
+        print("\nHint: Run 'python -m src.sparkle.model.scripts.train' instead\n")
+        exit(0)
+    
+    print("\nRunning in evaluation mode...")
+    print("="*50 + "\n")
+    
     CHECKPOINT_PATH = os.path.join(
         get_project_root(), "checkpoints", "checkpoint_1.pth"
     )
