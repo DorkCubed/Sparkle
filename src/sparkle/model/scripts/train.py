@@ -351,7 +351,7 @@ class PacketLevelTrainer:
 
     def save_checkpoint(self, epoch, checkpoint_dir="checkpoints"):
         os.makedirs(checkpoint_dir, exist_ok=True)
-        checkpoint_path = os.path.join(checkpoint_dir, f"checkpoint_{epoch + 1}.pth")
+        checkpoint_path = os.path.join(checkpoint_dir, f"checkpoint.pth")
 
         state = {
             "epoch": epoch,
@@ -483,8 +483,6 @@ if __name__ == "__main__":
         print("Invalid input. Please enter 'train' or 'eval'.")
     
     if mode == "eval":
-        print("\nSwitching to evaluation mode...")
-        print("="*50)
         print("\nHint: Run 'python -m src.sparkle.model.scripts.eval' instead\n")
         exit(0)
     
@@ -536,8 +534,7 @@ if __name__ == "__main__":
     
     print("-" * 30)
     print(f"Configuration: manifest={manifest_file}, epochs={num_epochs}")
-    print()
-    
+
     # Create runner with custom manifest and epochs
     manifest_path = os.path.join(get_project_root(), "manifest", manifest_file)
     runner = ExperimentRunner(manifest_path=manifest_path, num_epochs=num_epochs)
