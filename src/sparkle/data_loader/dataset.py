@@ -29,6 +29,7 @@ class PacketSequenceDataset(Dataset):
         chunk_size,
         max_files=None,
         device=None,
+        base_path=None,
     ):
         self.tokenizer = tokenizer
         self.config = config
@@ -39,6 +40,7 @@ class PacketSequenceDataset(Dataset):
             if device is not None
             else torch.device("cuda" if torch.cuda.is_available() else "cpu")
         )
+        self.base_path = base_path  # Custom base path for remapping
         self.files = self._load_manifest()
         self.fs = S3FileSystem()
 
@@ -61,10 +63,17 @@ class PacketSequenceDataset(Dataset):
         if self.max_files is not None:
             data = data[: self.max_files]
 
-        files = [
-            {k: remap_path(m[k]) for k in ("packet", "header", "field", "direction")}
-            for m in data
-        ]
+        # Use custom base path if provided, otherwise use default
+        if self.base_path:
+            files = [
+                {k: os.path.join(os.path.expanduser(self.base_path), m[k]) if m[k].startswith("netml-s3-bucket/") else m[k] for k in ("packet", "header", "field", "direction")}
+                for m in data
+            ]
+        else:
+            files = [
+                {k: remap_path(m[k]) for k in ("packet", "header", "field", "direction")}
+                for m in data
+            ]
 
         return files
 

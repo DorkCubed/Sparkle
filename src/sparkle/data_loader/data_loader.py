@@ -6,7 +6,7 @@ from sparkle.data_loader.tokenizer.tokenizer import Tokenizer
 
 
 class DataModule:
-    def __init__(self, device=None, config=None):
+    def __init__(self, device=None, config=None, base_path=None):
         print("Reached data module.")
 
         self.config = config if config is not None else Config()
@@ -15,8 +15,11 @@ class DataModule:
             if device is not None
             else torch.device("cuda" if torch.cuda.is_available() else "cpu")
         )
+        self.base_path = base_path  # Base path for S3 remapping (train vs eval)
         print(f"Using device: {self.device}")
         print(f"Using manifest: {self.config.manifest_path}")
+        if self.base_path:
+            print(f"Using custom base path: {self.base_path}")
 
         self.tokenizer = self._load_tokenizer()
 
@@ -38,6 +41,7 @@ class DataModule:
             tokenizer=self.tokenizer,
             chunk_size=self.config.chunk_size,
             device=self.device,
+            base_path=self.base_path,
         )
 
     def _init_dataloader(self):
