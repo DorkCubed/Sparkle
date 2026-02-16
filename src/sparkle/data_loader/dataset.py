@@ -106,6 +106,22 @@ class PacketSequenceDataset(Dataset):
                 count += chunk.count(b"\n")
         return count
 
+    def _read_lines_chunk(self, path, start_line, num_lines):
+        """Read only specific lines from a file without loading entire file."""
+        lines = []
+        with open(path, "r", encoding="utf-8") as f:
+            # Skip to start line
+            for _ in range(start_line):
+                next(f, None)
+            # Read only needed lines
+            for _ in range(num_lines):
+                try:
+                    line = next(f)
+                    lines.append(line.strip())
+                except StopIteration:
+                    break
+        return lines
+
     def __len__(self):
         return self.total_len
 
@@ -127,37 +143,32 @@ class PacketSequenceDataset(Dataset):
             entry["direction"],
         )
 
-        hex_dumps = self._read_file(packet_path).splitlines()
+        # Stream only the needed chunk instead of loading entire file
+        chunk_start = line_idx * self.chunk_size
+        # Read chunk_size lines - _read_lines_chunk handles EOF gracefully
+        hex_dumps = self._read_lines_chunk(packet_path, chunk_start, self.chunk_size)
         padded_all_tokens, token_ids, mask, max_length = self.tokenizer.encode_packet(
             hex_dumps
         )
 
-        # Slice out the chunk from token_ids
-        chunk_start = line_idx * self.chunk_size
-        chunk_end = min((line_idx + 1) * self.chunk_size, token_ids.size(0))
-        chunk = token_ids[chunk_start:chunk_end]
+        chunk = token_ids
+        chunk_end = chunk_start + len(hex_dumps)
 
-        field_position = field_pos_safe(
-            field_path,
-            chunk_start,
-            chunk_end,
-            max_len=self.config.max_len,
-            device="cpu",
-        )
-        header_position = header_pos_safe(
-            header_path,
-            chunk_start,
-            chunk_end,
-            max_len=self.config.max_len,
-            device="cpu",
-        )
+        field_position = field_pos_safe(field_path, 0, len(hex_dumps), device="cpu")
+        header_position = header_pos_safe(header_path, 0, len(hex_dumps), device="cpu")
 
         max_model_len = self.config.max_len
+        actual_len = chunk.size(1)
 
-        if chunk.size(1) > max_model_len:
+        # Truncate to max_model_len
+        if actual_len > max_model_len:
             chunk = chunk[:, :max_model_len]
+            actual_len = max_model_len
 
-            field_position = field_position[:, :max_model_len]
-            header_position = header_position[:, :max_model_len]
+        # Truncate positional encodings to match chunk length
+        if field_position.size(1) > actual_len:
+            field_position = field_position[:, :actual_len]
+        if header_position.size(1) > actual_len:
+            header_position = header_position[:, :actual_len]
 
         return chunk, field_position, header_position, entry
