@@ -90,7 +90,7 @@ class PacketLevelTrainer:
         self.previous_entry = None
         self.total_packet_enc_loss = 0
 
-        self.FLOW_CHUNK_SIZE = 512
+        self.FLOW_CHUNK_SIZE = 128  # Reduced from 512 to process more frequently
 
     def _init_vocab(self):
         vocab = {}
@@ -163,7 +163,7 @@ class PacketLevelTrainer:
         total_chunks = 0
 
         start = 0
-        SUB_CHUNK_SIZE = 64  # Process in smaller chunks to avoid OOM
+        SUB_CHUNK_SIZE = 32  # Process in smaller chunks to avoid OOM
 
         while start < len(encodings):
             chunk = encodings[start : start + FLOW_CHUNK_SIZE]
