@@ -315,6 +315,14 @@ class PacketLevelTrainer:
                 self.total_packet_enc_loss = 0
                 self.skipped += 1
 
+            # Monitor GPU memory every 50 batches
+            if i % 50 == 0 and torch.cuda.is_available():
+                allocated = torch.cuda.memory_allocated() / 1e9
+                reserved = torch.cuda.memory_reserved() / 1e9
+                logger.info(
+                    f"Batch {i} GPU memory: allocated={allocated:.2f}GB, reserved={reserved:.2f}GB"
+                )
+
             try:
                 # Packet-level forward pass
                 mlm_loss, sfbo_loss, encoded_packets_mean = self.packet_encoder(
@@ -334,6 +342,25 @@ class PacketLevelTrainer:
 
                 self.all_packet_encodings.append(encoded_packets_mean.detach().cpu())
                 self.step_successful = True
+
+                # Process encodings in chunks to prevent memory buildup
+                if len(self.all_packet_encodings) >= self.FLOW_CHUNK_SIZE:
+                    try:
+                        chunk_loss = self.process_encodings(
+                            self.all_packet_encodings[: self.FLOW_CHUNK_SIZE],
+                            self.previous_entry if self.previous_entry else entry,
+                        )
+                        if chunk_loss is not None and hasattr(chunk_loss, "backward"):
+                            self.optimizer.zero_grad()
+                            chunk_loss.backward()
+                            self.optimizer.step()
+                    except Exception as proc_e:
+                        logger.exception(f"Error processing encoding chunk: {proc_e}")
+                    finally:
+                        # Remove processed encodings to free memory
+                        self.all_packet_encodings = self.all_packet_encodings[
+                            self.FLOW_CHUNK_SIZE :
+                        ]
             except Exception as e:
                 if self.is_cuda_oom(e):
                     logger.error(f"CUDA OOM at batch {i}, skipping batch")
