@@ -63,10 +63,10 @@ class PacketLevelTrainer:
         self.flow_embedding = flow_embedding.to(self.device)
         self.flow_encoder = flow_encoder.to(self.device)
 
-        data_module = DataModule(
+        self.data_module = DataModule(
             device=self.device, config=self.config, base_path=TRAIN_BASE_PATH
         )
-        self.train_loader, self.train_loader_len = data_module.get_batches_with_length()
+        self.train_loader_len = len(self.data_module.get_loader())
 
         self.optimizer = optim.Adam(
             list(self.flow_embedding.parameters())
@@ -223,8 +223,11 @@ class PacketLevelTrainer:
         logger.info(f"Starting training epoch {epoch + 1}")
         logger.info(f"{'=' * 30}")
 
+        # Create fresh generator for each epoch
+        train_loader = self.data_module.get_batches()
+
         progress_bar = tqdm(
-            self.train_loader,
+            train_loader,
             total=self.train_loader_len,
             desc=f"Epoch {epoch + 1}",
             leave=False,
