@@ -163,46 +163,55 @@ class PacketLevelTrainer:
         total_chunks = 0
 
         start = 0
+        SUB_CHUNK_SIZE = 64  # Process in smaller chunks to avoid OOM
 
         while start < len(encodings):
             chunk = encodings[start : start + FLOW_CHUNK_SIZE]
             dir_chunk = direction_data[start : start + FLOW_CHUNK_SIZE]
 
-            packet_chunk = None
-            direction_tensor = None
-            flow_embeddings = None
+            # Process large chunks in smaller sub-chunks
+            sub_start = 0
+            while sub_start < len(chunk):
+                sub_chunk = chunk[sub_start : sub_start + SUB_CHUNK_SIZE]
+                sub_dir_chunk = dir_chunk[sub_start : sub_start + SUB_CHUNK_SIZE]
 
-            try:
-                packet_chunk = torch.cat(chunk, dim=0).to(self.device)
-                direction_tensor = torch.tensor(dir_chunk, device=self.device)
+                packet_chunk = None
+                direction_tensor = None
+                flow_embeddings = None
 
-                flow_embeddings, pad_indices = self.flow_embedding(
-                    packet_chunk, direction_tensor
-                )
+                try:
+                    packet_chunk = torch.cat(sub_chunk, dim=0).to(self.device)
+                    direction_tensor = torch.tensor(sub_dir_chunk, device=self.device)
 
-                _, mpm_loss = self.flow_encoder(flow_embeddings, pad_indices)
+                    flow_embeddings, pad_indices = self.flow_embedding(
+                        packet_chunk, direction_tensor
+                    )
 
-                total_loss += mpm_loss[0]
-                total_chunks += 1
+                    _, mpm_loss = self.flow_encoder(flow_embeddings, pad_indices)
 
-            except Exception as e:
-                logger.exception(f"Unexpected error inside process_encodings: {e}")
+                    total_loss += mpm_loss[0]
+                    total_chunks += 1
 
-                if self.is_cuda_oom(e):
-                    print("Hit CUDA OOM")
+                except Exception as e:
+                    logger.exception(f"Unexpected error inside process_encodings: {e}")
+
+                    if self.is_cuda_oom(e):
+                        print("Hit CUDA OOM in sub-chunk processing")
+                        torch.cuda.empty_cache()
+                        return None
+                    else:
+                        return None
+
+                finally:
+                    if packet_chunk is not None:
+                        del packet_chunk
+                    if direction_tensor is not None:
+                        del direction_tensor
+                    if flow_embeddings is not None:
+                        del flow_embeddings
                     torch.cuda.empty_cache()
-                    return None
-                else:
-                    return None
 
-            finally:
-                if packet_chunk is not None:
-                    del packet_chunk
-                if direction_tensor is not None:
-                    del direction_tensor
-                if flow_embeddings is not None:
-                    del flow_embeddings
-                torch.cuda.empty_cache()
+                sub_start += SUB_CHUNK_SIZE
 
             start += FLOW_CHUNK_SIZE
 
@@ -315,13 +324,23 @@ class PacketLevelTrainer:
                 self.total_packet_enc_loss = 0
                 self.skipped += 1
 
-            # Monitor GPU memory every 50 batches
-            if i % 50 == 0 and torch.cuda.is_available():
-                allocated = torch.cuda.memory_allocated() / 1e9
-                reserved = torch.cuda.memory_reserved() / 1e9
-                logger.info(
-                    f"Batch {i} GPU memory: allocated={allocated:.2f}GB, reserved={reserved:.2f}GB"
-                )
+            # Monitor GPU memory every 50 batches and log detailed info near batch 178
+            if torch.cuda.is_available():
+                if i % 50 == 0 or (175 <= i <= 180):
+                    allocated = torch.cuda.memory_allocated() / 1e9
+                    reserved = torch.cuda.memory_reserved() / 1e9
+                    logger.info(
+                        f"Batch {i} GPU memory: allocated={allocated:.2f}GB, reserved={reserved:.2f}GB"
+                    )
+                    if 175 <= i <= 180:
+                        logger.info(
+                            f"  packet_sequences shape: {packet_sequences.shape}"
+                        )
+                        logger.info(f"  field_position shape: {field_position.shape}")
+                        logger.info(f"  header_position shape: {header_position.shape}")
+                        logger.info(
+                            f"  all_packet_encodings length: {len(self.all_packet_encodings)}"
+                        )
 
             try:
                 # Packet-level forward pass
