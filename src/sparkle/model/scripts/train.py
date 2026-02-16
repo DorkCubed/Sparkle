@@ -381,6 +381,9 @@ class PacketLevelTrainer:
                             self.FLOW_CHUNK_SIZE :
                         ]
             except Exception as e:
+                logger.error(
+                    f"Exception at batch {i}: {type(e).__name__}: {str(e)[:200]}"
+                )
                 if self.is_cuda_oom(e):
                     logger.error(f"CUDA OOM at batch {i}, skipping batch")
                     logger.error(
