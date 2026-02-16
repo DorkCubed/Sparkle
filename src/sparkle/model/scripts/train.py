@@ -33,7 +33,14 @@ TRAIN_BASE_PATH = "~/sparkle-datavol/local"
 
 
 class PacketLevelTrainer:
-    def __init__(self, packet_encoder, flow_embedding, flow_encoder, manifest_path=None, num_epochs=None):
+    def __init__(
+        self,
+        packet_encoder,
+        flow_embedding,
+        flow_encoder,
+        manifest_path=None,
+        num_epochs=None,
+    ):
         self.config = Config()
         self.vocab = self._init_vocab()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -45,7 +52,7 @@ class PacketLevelTrainer:
             self.config.manifest_path = os.path.join(
                 get_project_root(), "manifest", "manifest_10.json"
             )
-        
+
         # Override num_epochs if provided
         if num_epochs:
             self.config.num_epochs = num_epochs
@@ -56,7 +63,9 @@ class PacketLevelTrainer:
         self.flow_embedding = flow_embedding.to(self.device)
         self.flow_encoder = flow_encoder.to(self.device)
 
-        data_module = DataModule(device=self.device, config=self.config, base_path=TRAIN_BASE_PATH)
+        data_module = DataModule(
+            device=self.device, config=self.config, base_path=TRAIN_BASE_PATH
+        )
         self.train_loader, self.train_loader_len = data_module.get_batches_with_length()
 
         self.optimizer = optim.Adam(
@@ -159,6 +168,10 @@ class PacketLevelTrainer:
             chunk = encodings[start : start + FLOW_CHUNK_SIZE]
             dir_chunk = direction_data[start : start + FLOW_CHUNK_SIZE]
 
+            packet_chunk = None
+            direction_tensor = None
+            flow_embeddings = None
+
             try:
                 packet_chunk = torch.cat(chunk, dim=0).to(self.device)
                 direction_tensor = torch.tensor(dir_chunk, device=self.device)
@@ -183,7 +196,12 @@ class PacketLevelTrainer:
                     return None
 
             finally:
-                del packet_chunk, direction_tensor, flow_embeddings
+                if packet_chunk is not None:
+                    del packet_chunk
+                if direction_tensor is not None:
+                    del direction_tensor
+                if flow_embeddings is not None:
+                    del flow_embeddings
                 torch.cuda.empty_cache()
 
             start += FLOW_CHUNK_SIZE
@@ -397,14 +415,16 @@ class ExperimentRunner:
                 get_project_root(), "manifest", "manifest_10.json"
             )
             logger.info(f"Using default manifest: {self.config.manifest_path}")
-        
+
         # Override num_epochs if provided
         if num_epochs:
             self.config.num_epochs = num_epochs
             logger.info(f"Using custom epochs: {self.config.num_epochs}")
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        data_module = DataModule(device=self.device, config=self.config, base_path=TRAIN_BASE_PATH)
+        data_module = DataModule(
+            device=self.device, config=self.config, base_path=TRAIN_BASE_PATH
+        )
         self.tokenizer = data_module.get_tokenizer()
         logger.info(f"Using device: {self.device}")
         if torch.cuda.is_available():
@@ -458,9 +478,11 @@ class ExperimentRunner:
         ).to(self.device)
 
         trainer = PacketLevelTrainer(
-            packet_encoder, flow_embedding, flow_encoder,
+            packet_encoder,
+            flow_embedding,
+            flow_encoder,
             manifest_path=self.config.manifest_path,
-            num_epochs=self.config.num_epochs
+            num_epochs=self.config.num_epochs,
         )
 
         print("Loaded trainer.")
@@ -471,52 +493,59 @@ class ExperimentRunner:
 
 
 if __name__ == "__main__":
-    print("\n" + "="*50)
+    print("\n" + "=" * 50)
     print("Sparkle Model Runner")
-    print("="*50)
+    print("=" * 50)
     print("\nYou are about to run: train.py")
-    
+
     while True:
-        mode = input("\nDo you want to run in training mode or evaluation mode? (train/eval): ").strip().lower()
+        mode = (
+            input(
+                "\nDo you want to run in training mode or evaluation mode? (train/eval): "
+            )
+            .strip()
+            .lower()
+        )
         if mode in ["train", "eval"]:
             break
         print("Invalid input. Please enter 'train' or 'eval'.")
-    
+
     if mode == "eval":
         print("\nHint: Run 'python -m src.sparkle.model.scripts.eval' instead\n")
         exit(0)
-    
+
     print("\nRunning in training mode...")
-    print("="*50)
-    
+    print("=" * 50)
+
     # Ask for manifest selection
     print("\nTraining Configuration:")
     print("-" * 30)
-    
+
     # List available manifests
     available_manifests = {
         "1": "manifest_10.json",
-        "2": "manifest_100.json",
-        "3": "manifest.json",
-        "4": "eval_manifest.json"
+        "2": "manifest_50.json",
+        "3": "manifest_100.json",
+        "4": "manifest.json",
+        "5": "eval_manifest.json",
     }
-    
+
     print("\nAvailable manifests:")
     for key, manifest in available_manifests.items():
         print(f"  {key}. {manifest}")
-    
+
     while True:
-        manifest_input = input("\nSelect manifest (1-4, default: 1): ").strip()
+        manifest_input = input("\nSelect manifest (1-5, default: 1): ").strip()
         if manifest_input == "":
             manifest_file = available_manifests["1"]
             break
         if manifest_input in available_manifests:
             manifest_file = available_manifests[manifest_input]
             break
-        print("Invalid selection. Please enter 1, 2, 3, or 4.")
-    
+        print("Invalid selection. Please enter 1, 2, 3, 4, or 5.")
+
     print(f"Selected: {manifest_file}")
-    
+
     # Ask for number of epochs
     while True:
         epochs_input = input("Enter number of epochs (default: 1): ").strip()
@@ -531,7 +560,7 @@ if __name__ == "__main__":
                 print("Please enter a positive number.")
         except ValueError:
             print("Invalid input. Please enter a number.")
-    
+
     print("-" * 30)
     print(f"Configuration: manifest={manifest_file}, epochs={num_epochs}")
 

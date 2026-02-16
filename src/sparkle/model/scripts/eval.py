@@ -156,7 +156,9 @@ class PacketLevelEvaluator:
 
         direction_file_path = entry.get("direction")
         if direction_file_path is None:
-            logger.error("Entry missing required key 'direction', skipping flow-level eval.")
+            logger.error(
+                "Entry missing required key 'direction', skipping flow-level eval."
+            )
             return None, 0
 
         direction_file_path = remap_path(direction_file_path)
@@ -195,10 +197,14 @@ class PacketLevelEvaluator:
 
             except Exception as e:
                 if self.is_cuda_oom(e):
-                    logger.error(f"CUDA OOM during flow processing at chunk starting at {start}")
+                    logger.error(
+                        f"CUDA OOM during flow processing at chunk starting at {start}"
+                    )
                     torch.cuda.empty_cache()
                 else:
-                    logger.error(f"Error during flow processing at chunk starting at {start}: {e}")
+                    logger.error(
+                        f"Error during flow processing at chunk starting at {start}: {e}"
+                    )
                 return None, 0
             finally:
                 del packet_chunk, direction_tensor, flow_embeddings
@@ -451,7 +457,7 @@ def run_evaluation(
 ):
     if checkpoint_path is None:
         checkpoint_path = os.path.join(
-            get_project_root(), "checkpoints", "checkpoint_1.pth"
+            get_project_root(), "src", "checkpoints", "checkpoint.pth"
         )
     if eval_manifest_path is None:
         eval_manifest_path = os.path.join(
@@ -475,8 +481,8 @@ def run_evaluation(
     logger.info(f"Vocabulary size: {len(vocab)}")
 
     logger.info("Loading model from checkpoint...")
-    packet_encoder, flow_embedding, flow_encoder = (
-        load_model_from_checkpoint(checkpoint_path, config, vocab, device)
+    packet_encoder, flow_embedding, flow_encoder = load_model_from_checkpoint(
+        checkpoint_path, config, vocab, device
     )
 
     logger.info("Initializing evaluator...")
@@ -521,30 +527,36 @@ def run_evaluation(
 
 
 if __name__ == "__main__":
-    print("\n" + "="*50)
+    print("\n" + "=" * 50)
     print("Sparkle Model Runner")
-    print("="*50)
+    print("=" * 50)
     print("\nYou are about to run: eval.py")
-    
+
     while True:
-        mode = input("\nDo you want to run in training mode or evaluation mode? (train/eval): ").strip().lower()
+        mode = (
+            input(
+                "\nDo you want to run in training mode or evaluation mode? (train/eval): "
+            )
+            .strip()
+            .lower()
+        )
         if mode in ["train", "eval"]:
             break
         print("Invalid input. Please enter 'train' or 'eval'.")
-    
+
     if mode == "train":
         print("\nSwitching to training mode...")
-        print("="*50)
+        print("=" * 50)
         print("\nHint: Run 'python -m src.sparkle.model.scripts.train' instead\n")
         exit(0)
-    
+
     print("\nRunning in evaluation mode...")
-    print("="*50 + "\n")
-    
+    print("=" * 50 + "\n")
+
     # Interactive prompts for evaluation parameters
     print("\nEvaluation Configuration:")
     print("-" * 30)
-    
+
     # Ask for max_samples
     while True:
         samples_input = input("Enter max samples to evaluate (default: 1000): ").strip()
@@ -559,10 +571,12 @@ if __name__ == "__main__":
                 print("Please enter a positive number.")
         except ValueError:
             print("Invalid input. Please enter a number.")
-    
+
     # Ask for max_files
     while True:
-        files_input = input("Enter max files to evaluate (default: 100, 0 for all files): ").strip()
+        files_input = input(
+            "Enter max files to evaluate (default: 100, 0 for all files): "
+        ).strip()
         if files_input == "":
             MAX_FILES = 100
             break
@@ -576,13 +590,15 @@ if __name__ == "__main__":
                 print("Please enter a non-negative number.")
         except ValueError:
             print("Invalid input. Please enter a number.")
-    
+
     print("-" * 30)
-    print(f"Configuration: max_samples={MAX_SAMPLES}, max_files={MAX_FILES if MAX_FILES else 'unlimited'}")
+    print(
+        f"Configuration: max_samples={MAX_SAMPLES}, max_files={MAX_FILES if MAX_FILES else 'unlimited'}"
+    )
     print()
-    
+
     CHECKPOINT_PATH = os.path.join(
-        get_project_root(), "checkpoints", "checkpoint_1.pth"
+        get_project_root(), "src", "checkpoints", "checkpoint.pth"
     )
     EVAL_MANIFEST_PATH = os.path.join(
         get_project_root(), "manifest", "eval_manifest.json"
