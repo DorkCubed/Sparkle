@@ -22,20 +22,32 @@ def pad_sequences(sequences, max_len, padding_value=0):
     return padded_sequences
 
 
-def field_pos_safe(filename, start_idx, end_idx, device="cpu"):
+def field_pos_safe(filename, start_idx, end_idx, max_len=578, device="cpu"):
     """
     Safe version of field_pos. Returns a padded tensor even if the file is missing
-    or indices are out of range.
+    or indices are out of range. Uses streaming to avoid loading entire file.
     """
     filename = remap_path(filename)
     try:
         with open(filename, "r") as file:
-            lines = file.readlines()
+            # Stream through file, only collecting needed lines
+            token_field_pos_emb_list = []
+            line_count = 0
+
+            for line in file:
+                if line_count >= start_idx and line_count < end_idx:
+                    parsed = parse_line_to_list(line)
+                    token_field_pos_emb_list.append(parsed)
+                elif line_count >= end_idx:
+                    # Stop reading after we have what we need
+                    break
+                line_count += 1
+
     except FileNotFoundError:
         print(f"Warning: {filename} (field) not found. Returning zero tensor.")
         return torch.zeros((1, 1), dtype=torch.long, device=device)
 
-    n = len(lines)
+    n = line_count
     if start_idx >= n:
         print(
             f"Warning: start_idx {start_idx} >= number of lines {n} in file {filename}"
@@ -43,34 +55,42 @@ def field_pos_safe(filename, start_idx, end_idx, device="cpu"):
         return torch.zeros((1, 1), dtype=torch.long, device=device)
 
     end_idx = min(end_idx, n)
-
-    parsed_lines = [parse_line_to_list(line) for line in lines]
-    token_field_pos_emb_list = parsed_lines[start_idx:end_idx]
 
     if not token_field_pos_emb_list:
         print(f"Warning: empty chunk from {start_idx} to {end_idx} in file {filename}")
         return torch.zeros((1, 1), dtype=torch.long, device=device)
 
-    max_len = max(len(seq) for seq in parsed_lines) + 2
     padded_sequences = pad_sequences(token_field_pos_emb_list, max_len)
 
     return torch.tensor(padded_sequences, dtype=torch.long, device=device)
 
 
-def header_pos_safe(filename, start_idx, end_idx, device="cpu"):
+def header_pos_safe(filename, start_idx, end_idx, max_len=578, device="cpu"):
     """
     Safe version of header_pos. Returns a padded tensor even if the file is missing
-    or indices are out of range.
+    or indices are out of range. Uses streaming to avoid loading entire file.
     """
     filename = remap_path(filename)
     try:
         with open(filename, "r") as file:
-            lines = file.readlines()
+            # Stream through file, only collecting needed lines
+            token_header_pos_emb_list = []
+            line_count = 0
+
+            for line in file:
+                if line_count >= start_idx and line_count < end_idx:
+                    parsed = parse_line_to_list(line)
+                    token_header_pos_emb_list.append(parsed)
+                elif line_count >= end_idx:
+                    # Stop reading after we have what we need
+                    break
+                line_count += 1
+
     except FileNotFoundError:
         print(f"Warning: {filename} (header) not found. Returning zero tensor.")
         return torch.zeros((1, 1), dtype=torch.long, device=device)
 
-    n = len(lines)
+    n = line_count
     if start_idx >= n:
         print(
             f"Warning: start_idx {start_idx} >= number of lines {n} in file {filename}"
@@ -79,14 +99,10 @@ def header_pos_safe(filename, start_idx, end_idx, device="cpu"):
 
     end_idx = min(end_idx, n)
 
-    parsed_lines = [parse_line_to_list(line) for line in lines]
-    token_header_pos_emb_list = parsed_lines[start_idx:end_idx]
-
     if not token_header_pos_emb_list:
         print(f"Warning: empty chunk from {start_idx} to {end_idx} in file {filename}")
         return torch.zeros((1, 1), dtype=torch.long, device=device)
 
-    max_len = max(len(seq) for seq in parsed_lines) + 2
     padded_sequences = pad_sequences(token_header_pos_emb_list, max_len)
 
     return torch.tensor(padded_sequences, dtype=torch.long, device=device)

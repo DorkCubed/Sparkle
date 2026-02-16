@@ -49,7 +49,7 @@ class PacketSequenceDataset(Dataset):
         self.total_chunks = []
 
         for file in self.files:
-            num_lines = len(self._read_file(file["packet"]).splitlines())
+            num_lines = self._count_lines_streaming(file["packet"])
             num_chunks = (num_lines + self.chunk_size - 1) // self.chunk_size
             self.total_chunks.append(num_chunks)
 
@@ -66,12 +66,20 @@ class PacketSequenceDataset(Dataset):
         # Use custom base path if provided, otherwise use default
         if self.base_path:
             files = [
-                {k: os.path.join(os.path.expanduser(self.base_path), m[k]) if m[k].startswith("netml-s3-bucket/") else m[k] for k in ("packet", "header", "field", "direction")}
+                {
+                    k: os.path.join(os.path.expanduser(self.base_path), m[k])
+                    if m[k].startswith("netml-s3-bucket/")
+                    else m[k]
+                    for k in ("packet", "header", "field", "direction")
+                }
                 for m in data
             ]
         else:
             files = [
-                {k: remap_path(m[k]) for k in ("packet", "header", "field", "direction")}
+                {
+                    k: remap_path(m[k])
+                    for k in ("packet", "header", "field", "direction")
+                }
                 for m in data
             ]
 
@@ -84,6 +92,19 @@ class PacketSequenceDataset(Dataset):
     def _read_file(self, path):
         path = Path(path)
         return path.read_text(encoding="utf-8")
+
+    def _count_lines_streaming(self, path):
+        """Count lines in a file without loading entire file into memory."""
+        count = 0
+        with open(path, "rb") as f:
+            # Read in chunks to avoid loading entire file
+            chunk_size = 1024 * 1024  # 1MB chunks
+            while True:
+                chunk = f.read(chunk_size)
+                if not chunk:
+                    break
+                count += chunk.count(b"\n")
+        return count
 
     def __len__(self):
         return self.total_len
@@ -117,10 +138,18 @@ class PacketSequenceDataset(Dataset):
         chunk = token_ids[chunk_start:chunk_end]
 
         field_position = field_pos_safe(
-            field_path, chunk_start, chunk_end, device="cpu"
+            field_path,
+            chunk_start,
+            chunk_end,
+            max_len=self.config.max_len,
+            device="cpu",
         )
         header_position = header_pos_safe(
-            header_path, chunk_start, chunk_end, device="cpu"
+            header_path,
+            chunk_start,
+            chunk_end,
+            max_len=self.config.max_len,
+            device="cpu",
         )
 
         max_model_len = self.config.max_len
