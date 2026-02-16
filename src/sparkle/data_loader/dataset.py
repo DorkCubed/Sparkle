@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 import torch
+import torch.nn.functional as F
 from s3fs import S3FileSystem
 from torch.utils.data import Dataset
 
@@ -165,10 +166,19 @@ class PacketSequenceDataset(Dataset):
             chunk = chunk[:, :max_model_len]
             actual_len = max_model_len
 
-        # Truncate positional encodings to match chunk length
+        # Truncate or pad positional encodings to match chunk length
         if field_position.size(1) > actual_len:
             field_position = field_position[:, :actual_len]
+        elif field_position.size(1) < actual_len:
+            # Pad with zeros to match chunk length
+            pad_size = actual_len - field_position.size(1)
+            field_position = F.pad(field_position, (0, pad_size), value=0)
+
         if header_position.size(1) > actual_len:
             header_position = header_position[:, :actual_len]
+        elif header_position.size(1) < actual_len:
+            # Pad with zeros to match chunk length
+            pad_size = actual_len - header_position.size(1)
+            header_position = F.pad(header_position, (0, pad_size), value=0)
 
         return chunk, field_position, header_position, entry
