@@ -90,7 +90,7 @@ class PacketLevelTrainer:
         self.previous_entry = None
         self.total_packet_enc_loss = 0
 
-        self.FLOW_CHUNK_SIZE = 128  # Reduced from 512 to process more frequently
+        self.FLOW_CHUNK_SIZE = 64  # Process every 64 encodings to prevent accumulation
 
     def _init_vocab(self):
         vocab = {}
@@ -383,6 +383,27 @@ class PacketLevelTrainer:
             except Exception as e:
                 if self.is_cuda_oom(e):
                     logger.error(f"CUDA OOM at batch {i}, skipping batch")
+                    logger.error(
+                        f"  packet_sequences shape: {packet_sequences.shape}, device: {packet_sequences.device}"
+                    )
+                    logger.error(
+                        f"  field_position shape: {field_position.shape}, device: {field_position.device}"
+                    )
+                    logger.error(
+                        f"  header_position shape: {header_position.shape}, device: {header_position.device}"
+                    )
+                    logger.error(
+                        f"  all_packet_encodings length: {len(self.all_packet_encodings)}"
+                    )
+                    current_file = entry.get("packet", "unknown")
+                    logger.error(f"  Current file: {current_file}")
+                    if torch.cuda.is_available():
+                        logger.error(
+                            f"  GPU memory allocated: {torch.cuda.memory_allocated() / 1e9:.2f}GB"
+                        )
+                        logger.error(
+                            f"  GPU memory reserved: {torch.cuda.memory_reserved() / 1e9:.2f}GB"
+                        )
 
                     # critical cleanup
                     self.optimizer.zero_grad(set_to_none=True)
@@ -403,16 +424,20 @@ class PacketLevelTrainer:
 
             progress_bar.set_postfix({"skipped": self.skipped})
 
-        # Final file after loop
+        # Process any remaining encodings at end of epoch
         try:
-            if self.all_packet_encodings and self.previous_entry["packet"]:
+            if self.all_packet_encodings and self.previous_entry:
+                logger.info(
+                    f"Processing {len(self.all_packet_encodings)} remaining encodings at end of epoch"
+                )
                 final_loss = self.process_encodings(
                     self.all_packet_encodings, self.previous_entry
                 )
-                if final_loss is not None:
+                if final_loss is not None and hasattr(final_loss, "backward"):
                     self.optimizer.zero_grad()
                     final_loss.backward()
                     self.optimizer.step()
+                self.all_packet_encodings = []
         except Exception as e:
             logger.exception(f"Final mpm_loss computation failed: {e}")
 
