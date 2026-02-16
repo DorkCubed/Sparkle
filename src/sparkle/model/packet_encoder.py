@@ -39,6 +39,20 @@ class PacketLevelEncoder(nn.Module):
     def forward(self, packet_sequences, field_pos, header_pos, return_metrics=False):
         device = packet_sequences.device
 
+        # Ensure tensors have at least 2 dimensions
+        if packet_sequences.dim() == 0:
+            raise ValueError(f"packet_sequences is 0-d tensor: {packet_sequences}")
+        if packet_sequences.dim() == 1:
+            packet_sequences = packet_sequences.unsqueeze(0)
+        if field_pos.dim() == 0:
+            field_pos = field_pos.unsqueeze(0)
+        if field_pos.dim() == 1:
+            field_pos = field_pos.unsqueeze(0)
+        if header_pos.dim() == 0:
+            header_pos = header_pos.unsqueeze(0)
+        if header_pos.dim() == 1:
+            header_pos = header_pos.unsqueeze(0)
+
         # ideally move this to DataLoader for speed
         masked_packets, span_masks = apply_mlm_sfbo_masking(packet_sequences, field_pos)
         masked_packets = masked_packets.to(device, non_blocking=True)
@@ -128,6 +142,16 @@ def apply_mlm_sfbo_masking(
     span_masks = []
     masked_sequences = []
 
+    # Handle 0-dimensional tensors by adding a batch dimension
+    if packet_sequences.dim() == 0:
+        packet_sequences = packet_sequences.unsqueeze(0)
+    if packet_sequences.dim() == 1:
+        packet_sequences = packet_sequences.unsqueeze(0)
+    if field_pos.dim() == 0:
+        field_pos = field_pos.unsqueeze(0)
+    if field_pos.dim() == 1:
+        field_pos = field_pos.unsqueeze(0)
+
     # Unbind field_pos for processing
     field_pos = field_pos.unbind(0)
 
@@ -157,17 +181,15 @@ def apply_mlm_masking(packet_seq, mlm_prob):
     packet_seq_cpu = packet_seq.cpu()
     masked_sequences = packet_seq_cpu.clone()
     valid_mask = packet_seq_cpu != 0
-    valid_len = len(valid_mask)
-    mlm_mask = (torch.rand(valid_len) < mlm_prob) & valid_mask
+    # Create mask with same shape as valid_mask
+    mlm_mask = (torch.rand_like(packet_seq_cpu.float()) < mlm_prob) & valid_mask
     masked_sequences = masked_sequences.masked_fill(mlm_mask, 4)
 
     # Return the masked sequence on the CPU
     return masked_sequences
 
 
-def apply_sfbo_masking(
-    packet_seq, field_pos, max_span_length, padding_value
-):
+def apply_sfbo_masking(packet_seq, field_pos, max_span_length, padding_value):
     # Move tensors to CPU for processing
     packet_seq_cpu = packet_seq.cpu()
     field_pos_cpu = field_pos.cpu()
@@ -178,10 +200,12 @@ def apply_sfbo_masking(
     # Get unique fields (excluding zeros)
     unique_fields = torch.unique(field_pos_cpu[field_pos_cpu != 0]).tolist()
 
+    # Handle edge case: no valid fields
+    if len(unique_fields) == 0:
+        return masked_packet_seq
+
     # Randomly select number of spans and validate bounds
-    num_spans = random.randint(1, max_span_length)
-    if num_spans > len(unique_fields):
-        raise ValueError("num_spans exceeds the length of unique_fields list")
+    num_spans = random.randint(1, min(max_span_length, len(unique_fields)))
 
     # Select a random span of unique fields
     start_index = random.randint(0, len(unique_fields) - num_spans)

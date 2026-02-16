@@ -110,14 +110,23 @@ class PacketLevelTrainer:
             self.skipped += 1
             raise TypeError(f"{name} is not a tensor-like object")
 
-        if tensor.dim() > 1 and tensor.size(0) == 1:
-            tensor = tensor[0]
+        # Handle 0-d tensor first - add batch dimension
+        if tensor.dim() == 0:
+            tensor = tensor.unsqueeze(0)
 
-        try:
+        # Handle 1-d tensor - add batch dimension
+        if tensor.dim() == 1:
+            tensor = tensor.unsqueeze(0)
+
+        # Handle 2-d tensor with batch size 1 - remove batch dimension
+        if tensor.dim() > 1 and tensor.size(0) == 1:
             tensor = tensor.squeeze(0)
-        except Exception as e:
-            self.skipped += 1
-            raise RuntimeError(f"Failed to squeeze {name}: {e}") from e
+
+        # Now ensure it's at least 2-d
+        if tensor.dim() == 0:
+            tensor = tensor.unsqueeze(0)
+        if tensor.dim() == 1:
+            tensor = tensor.unsqueeze(0)
 
         try:
             tensor = tensor.to(device)
@@ -180,8 +189,17 @@ class PacketLevelTrainer:
                 flow_embeddings = None
 
                 try:
+                    if len(sub_chunk) == 0:
+                        logger.warning("Empty sub_chunk encountered, skipping")
+                        sub_start += SUB_CHUNK_SIZE
+                        continue
+
                     packet_chunk = torch.cat(sub_chunk, dim=0).to(self.device)
                     direction_tensor = torch.tensor(sub_dir_chunk, device=self.device)
+
+                    if packet_chunk.dim() == 0 or direction_tensor.dim() == 0:
+                        sub_start += SUB_CHUNK_SIZE
+                        continue
 
                     flow_embeddings, pad_indices = self.flow_embedding(
                         packet_chunk, direction_tensor

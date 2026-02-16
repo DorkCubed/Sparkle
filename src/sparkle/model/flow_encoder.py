@@ -44,6 +44,12 @@ class FlowLevelEncoder(nn.Module):
         self.self_attn_pooling = SelfAttentionPooling(embed_dim)
 
     def forward(self, flow_sequences, pad_indices_list):
+        # Ensure inputs are proper sequences for iteration
+        if flow_sequences.dim() == 0:
+            flow_sequences = flow_sequences.unsqueeze(0)
+        if pad_indices_list.dim() == 0:
+            pad_indices_list = pad_indices_list.unsqueeze(0)
+
         flow_encodings = []
         mpm_losses = []
 
