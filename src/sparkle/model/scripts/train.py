@@ -213,11 +213,18 @@ class PacketLevelTrainer:
                     # Pad all tensors to the same length before concatenation
                     max_len = max(t.size(0) for t in sub_chunk)
                     embed_dim = sub_chunk[0].size(1)
+
+                    # Get pad token embedding from flow_embedding to avoid zero vectors causing NaN
+                    pad_token_index = self.vocab.get("[PAD]", 0)
+                    pad_token_embedding = self.flow_embedding.token_embed(
+                        torch.tensor(pad_token_index, device=self.device)
+                    ).detach()
+
                     padded_sub_chunk = []
                     for t in sub_chunk:
                         if t.size(0) < max_len:
                             pad_size = max_len - t.size(0)
-                            padding = torch.zeros(pad_size, embed_dim)
+                            padding = pad_token_embedding.expand(pad_size, -1).cpu()
                             t = torch.cat([t, padding], dim=0)
                         padded_sub_chunk.append(t)
 
