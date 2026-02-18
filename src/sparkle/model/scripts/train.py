@@ -86,6 +86,7 @@ class PacketLevelTrainer:
         # bookkeeping logic
         self.previous_packet_file = None
         self.all_packet_encodings = []
+        self.all_packet_counts = []  # Track packet counts per encoding
         self.previous_packet_id = None
         self.previous_entry = None
         self.total_packet_enc_loss = 0
@@ -150,7 +151,7 @@ class PacketLevelTrainer:
 
     # TODO (done): fix this to not cause OOMs
     # TODO test
-    def process_encodings(self, encodings, entry):
+    def process_encodings(self, encodings, packet_counts, entry):
         FLOW_CHUNK_SIZE = self.FLOW_CHUNK_SIZE
 
         if not encodings:
@@ -168,6 +169,11 @@ class PacketLevelTrainer:
         except Exception:
             return None
 
+        # Compute cumulative packet counts for proper direction indexing
+        cumsum = [0]
+        for count in packet_counts:
+            cumsum.append(cumsum[-1] + count)
+
         total_loss = 0.0
         total_chunks = 0
 
@@ -176,13 +182,23 @@ class PacketLevelTrainer:
 
         while start < len(encodings):
             chunk = encodings[start : start + FLOW_CHUNK_SIZE]
-            dir_chunk = direction_data[start : start + FLOW_CHUNK_SIZE]
+            chunk_counts = packet_counts[start : start + FLOW_CHUNK_SIZE]
+
+            # Get direction slice based on cumulative packet counts
+            dir_start = cumsum[start]
+            dir_end = cumsum[start + len(chunk)]
+            dir_chunk = direction_data[dir_start:dir_end]
 
             # Process large chunks in smaller sub-chunks
             sub_start = 0
+            sub_dir_idx = 0  # Track position in dir_chunk by packet count
             while sub_start < len(chunk):
                 sub_chunk = chunk[sub_start : sub_start + SUB_CHUNK_SIZE]
-                sub_dir_chunk = dir_chunk[sub_start : sub_start + SUB_CHUNK_SIZE]
+                sub_counts = chunk_counts[sub_start : sub_start + SUB_CHUNK_SIZE]
+
+                # Get direction values based on packet counts
+                sub_dir_chunk = dir_chunk[sub_dir_idx : sub_dir_idx + sum(sub_counts)]
+                sub_dir_idx += sum(sub_counts)
 
                 packet_chunk = None
                 direction_tensor = None
@@ -194,8 +210,33 @@ class PacketLevelTrainer:
                         sub_start += SUB_CHUNK_SIZE
                         continue
 
-                    packet_chunk = torch.cat(sub_chunk, dim=0).to(self.device)
-                    direction_tensor = torch.tensor(sub_dir_chunk, device=self.device)
+                    # Pad all tensors to the same length before concatenation
+                    max_len = max(t.size(0) for t in sub_chunk)
+                    embed_dim = sub_chunk[0].size(1)
+                    padded_sub_chunk = []
+                    for t in sub_chunk:
+                        if t.size(0) < max_len:
+                            pad_size = max_len - t.size(0)
+                            padding = torch.zeros(pad_size, embed_dim)
+                            t = torch.cat([t, padding], dim=0)
+                        padded_sub_chunk.append(t)
+
+                    packet_chunk = torch.cat(padded_sub_chunk, dim=0).to(self.device)
+
+                    # Pad direction values to match padded packet lengths
+                    padded_dir = []
+                    dir_idx = 0
+                    for i, t in enumerate(padded_sub_chunk):
+                        pkt_count = sub_counts[i]
+                        d = sub_dir_chunk[dir_idx : dir_idx + pkt_count]
+                        dir_idx += pkt_count
+                        d_tensor = torch.tensor(d, dtype=torch.long, device="cpu")
+                        if d_tensor.size(0) < max_len:
+                            pad_size = max_len - d_tensor.size(0)
+                            d_padding = torch.zeros(pad_size, dtype=d_tensor.dtype)
+                            d_tensor = torch.cat([d_tensor, d_padding], dim=0)
+                        padded_dir.append(d_tensor)
+                    direction_tensor = torch.cat(padded_dir, dim=0).to(self.device)
 
                     if packet_chunk.dim() == 0 or direction_tensor.dim() == 0:
                         sub_start += SUB_CHUNK_SIZE
@@ -324,7 +365,9 @@ class PacketLevelTrainer:
                 ):
                     if self.all_packet_encodings:
                         mpm_loss = self.process_encodings(
-                            self.all_packet_encodings, self.previous_entry
+                            self.all_packet_encodings,
+                            self.all_packet_counts,
+                            self.previous_entry,
                         )
                         if mpm_loss is not None:
                             self.optimizer.zero_grad()
@@ -333,12 +376,14 @@ class PacketLevelTrainer:
 
                     # reset for new file
                     self.all_packet_encodings = []
+                    self.all_packet_counts = []
                     self.total_packet_enc_loss = 0
 
                 self.previous_packet_file = current_packet_file
             except Exception as e:
                 logger.exception(f"Error during file-boundary logic: {e}")
                 self.all_packet_encodings = []
+                self.all_packet_counts = []
                 self.total_packet_enc_loss = 0
                 self.skipped += 1
 
@@ -360,6 +405,7 @@ class PacketLevelTrainer:
                     )
 
                 self.all_packet_encodings.append(encoded_packets_mean.detach().cpu())
+                self.all_packet_counts.append(encoded_packets_mean.size(0))
                 self.step_successful = True
 
                 # Process encodings in chunks to prevent memory buildup
@@ -367,6 +413,7 @@ class PacketLevelTrainer:
                     try:
                         chunk_loss = self.process_encodings(
                             self.all_packet_encodings[: self.FLOW_CHUNK_SIZE],
+                            self.all_packet_counts[: self.FLOW_CHUNK_SIZE],
                             self.previous_entry if self.previous_entry else entry,
                         )
                         if chunk_loss is not None and hasattr(chunk_loss, "backward"):
@@ -378,6 +425,9 @@ class PacketLevelTrainer:
                     finally:
                         # Remove processed encodings to free memory
                         self.all_packet_encodings = self.all_packet_encodings[
+                            self.FLOW_CHUNK_SIZE :
+                        ]
+                        self.all_packet_counts = self.all_packet_counts[
                             self.FLOW_CHUNK_SIZE :
                         ]
             except Exception as e:
@@ -411,6 +461,7 @@ class PacketLevelTrainer:
                     self.accumulated_sfbo_loss = 0
                     self.batch_counter = 0
                     self.all_packet_encodings = []
+                    self.all_packet_counts = []
 
                     self.skipped += 1
                     continue
@@ -427,13 +478,16 @@ class PacketLevelTrainer:
                     f"Processing {len(self.all_packet_encodings)} remaining encodings at end of epoch"
                 )
                 final_loss = self.process_encodings(
-                    self.all_packet_encodings, self.previous_entry
+                    self.all_packet_encodings,
+                    self.all_packet_counts,
+                    self.previous_entry,
                 )
                 if final_loss is not None and hasattr(final_loss, "backward"):
                     self.optimizer.zero_grad()
                     final_loss.backward()
                     self.optimizer.step()
                 self.all_packet_encodings = []
+                self.all_packet_counts = []
         except Exception as e:
             logger.exception(f"Final mpm_loss computation failed: {e}")
 
