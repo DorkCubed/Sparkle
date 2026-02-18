@@ -559,9 +559,14 @@ if __name__ == "__main__":
 
     # Ask for max_samples
     while True:
-        samples_input = input("Enter max samples to evaluate (default: 1000): ").strip()
+        samples_input = input(
+            "Enter max samples to evaluate (default: 1000, -1 or 'none' for all): "
+        ).strip()
         if samples_input == "":
             MAX_SAMPLES = 1000
+            break
+        if samples_input.lower() == "none" or samples_input == "-1":
+            MAX_SAMPLES = None
             break
         try:
             MAX_SAMPLES = int(samples_input)
@@ -575,16 +580,19 @@ if __name__ == "__main__":
     # Ask for max_files
     while True:
         files_input = input(
-            "Enter max files to evaluate (default: 100, 0 for all files): "
+            "Enter max files to evaluate (default: 100, 0 or -1 for all files): "
         ).strip()
         if files_input == "":
             MAX_FILES = 100
             break
+        if files_input.lower() == "none":
+            MAX_FILES = None
+            break
         try:
             MAX_FILES = int(files_input)
-            if MAX_FILES >= 0:
-                if MAX_FILES == 0:
-                    MAX_FILES = None  # 0 means no limit
+            if MAX_FILES >= -1:
+                if MAX_FILES <= 0:
+                    MAX_FILES = None  # 0 or -1 means no limit
                 break
             else:
                 print("Please enter a non-negative number.")
