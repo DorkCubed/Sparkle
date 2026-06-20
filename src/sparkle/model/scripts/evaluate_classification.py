@@ -103,7 +103,7 @@ def extract_flow_embeddings(entry, tokenizer, packet_encoder, flow_embedding, fl
                 flow_emb, pad_indices = flow_embedding(encoded_packets, direction)
                 flow_enc, _ = flow_encoder(flow_emb, pad_indices)
             embeddings = flow_enc.cpu().numpy()
-            return [emb for emb in embeddings]
+            return [emb.mean(axis=0) for emb in embeddings]
         except ValueError as e:
             if "num_spans exceeds" in str(e) and attempt < 2:
                 continue
@@ -154,7 +154,7 @@ def main():
         X, labels, names, test_size=0.3, random_state=42, stratify=labels
     )
 
-    clf = LogisticRegression(max_iter=5000, multi_class="multinomial")
+    clf = LogisticRegression(max_iter=5000)
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
     acc = accuracy_score(y_test, y_pred)
