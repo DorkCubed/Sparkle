@@ -1,0 +1,35 @@
+2026-02-12 14:31:21,577 - __main__ - INFO - Initializing ExperimentRunner...
+2026-02-12 14:31:21,577 - __main__ - INFO - Using manifest: /home/jovyan/sparkle/manifest/manifest_100.json
+2026-02-12 14:31:21,598 - botocore.credentials - INFO - Found credentials in shared credentials file: ~/.aws/credentials
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/jovyan/sparkle/src/sparkle/model/scripts/train.py", line 462, in <module>
+    runner = ExperimentRunner()
+             ^^^^^^^^^^^^^^^^^^
+  File "/home/jovyan/sparkle/src/sparkle/model/scripts/train.py", line 391, in __init__
+    data_module = DataModule(device=self.device, config=self.config)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jovyan/sparkle/src/sparkle/data_loader/data_loader.py", line 23, in __init__
+    self.dataset = self._init_dataset()
+                   ^^^^^^^^^^^^^^^^^^^^
+  File "/home/jovyan/sparkle/src/sparkle/data_loader/data_loader.py", line 35, in _init_dataset
+    return PacketSequenceDataset(
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jovyan/sparkle/src/sparkle/data_loader/dataset.py", line 50, in __init__
+    num_lines = len(self._read_file(file["packet"]).splitlines())
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jovyan/sparkle/src/sparkle/data_loader/dataset.py", line 77, in _read_file
+    return path.read_text(encoding="utf-8")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jovyan/.local/share/uv/python/cpython-3.12.12-linux-x86_64-gnu/lib/python3.12/pathlib.py", line 1027, in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jovyan/.local/share/uv/python/cpython-3.12.12-linux-x86_64-gnu/lib/python3.12/pathlib.py", line 1013, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/home/jovyan/sparkle-finetuning/netml-s3-bucket/Working_folder/input_aws/Wireshark_Sample_PCAPs/split/Monday1426/packets/fuzz-2006-12-25-26408-0043.txt'
+/home/jovyan/sparkle
+Reached data module.
+Using device: cuda
+Using manifest: /home/jovyan/sparkle/manifest/manifest_100.json

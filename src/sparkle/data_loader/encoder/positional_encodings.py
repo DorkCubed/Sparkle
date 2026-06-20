@@ -1,8 +1,18 @@
+import os
 import torch
 import torch.nn as nn
 
+
+def remap_path(s3_path):
+    """Remap S3-style paths to local paths"""
+    if s3_path and s3_path.startswith("netml-s3-bucket/"):
+        return os.path.join(os.path.expanduser("~/sparkle-finetuning"), s3_path)
+    return s3_path
+
+
 def parse_line_to_list(line):
     return [int(x) for x in line.strip().split()]
+
 
 def pad_sequences(sequences, max_len, padding_value=0):
     padded_sequences = []
@@ -12,68 +22,91 @@ def pad_sequences(sequences, max_len, padding_value=0):
     return padded_sequences
 
 
-def field_pos_safe(filename, start_idx, end_idx, device='cpu'):
+def field_pos_safe(filename, start_idx, end_idx, max_len=578, device="cpu"):
     """
     Safe version of field_pos. Returns a padded tensor even if the file is missing
-    or indices are out of range.
+    or indices are out of range. Uses streaming to avoid loading entire file.
     """
+    filename = remap_path(filename)
     try:
         with open(filename, "r") as file:
-            lines = file.readlines()
+            # Stream through file, only collecting needed lines
+            token_field_pos_emb_list = []
+            line_count = 0
+
+            for line in file:
+                if line_count >= start_idx and line_count < end_idx:
+                    parsed = parse_line_to_list(line)
+                    token_field_pos_emb_list.append(parsed)
+                elif line_count >= end_idx:
+                    # Stop reading after we have what we need
+                    break
+                line_count += 1
+
     except FileNotFoundError:
         print(f"Warning: {filename} (field) not found. Returning zero tensor.")
         return torch.zeros((1, 1), dtype=torch.long, device=device)
 
-    n = len(lines)
+    n = line_count
     if start_idx >= n:
-        print(f"Warning: start_idx {start_idx} >= number of lines {n} in file {filename}")
+        print(
+            f"Warning: start_idx {start_idx} >= number of lines {n} in file {filename}"
+        )
         return torch.zeros((1, 1), dtype=torch.long, device=device)
 
     end_idx = min(end_idx, n)
-
-    parsed_lines = [parse_line_to_list(line) for line in lines]
-    token_field_pos_emb_list = parsed_lines[start_idx:end_idx]
 
     if not token_field_pos_emb_list:
         print(f"Warning: empty chunk from {start_idx} to {end_idx} in file {filename}")
         return torch.zeros((1, 1), dtype=torch.long, device=device)
 
-    max_len = max(len(seq) for seq in parsed_lines) + 2
     padded_sequences = pad_sequences(token_field_pos_emb_list, max_len)
 
     return torch.tensor(padded_sequences, dtype=torch.long, device=device)
 
 
-def header_pos_safe(filename, start_idx, end_idx, device='cpu'):
+def header_pos_safe(filename, start_idx, end_idx, max_len=578, device="cpu"):
     """
     Safe version of header_pos. Returns a padded tensor even if the file is missing
-    or indices are out of range.
+    or indices are out of range. Uses streaming to avoid loading entire file.
     """
+    filename = remap_path(filename)
     try:
         with open(filename, "r") as file:
-            lines = file.readlines()
+            # Stream through file, only collecting needed lines
+            token_header_pos_emb_list = []
+            line_count = 0
+
+            for line in file:
+                if line_count >= start_idx and line_count < end_idx:
+                    parsed = parse_line_to_list(line)
+                    token_header_pos_emb_list.append(parsed)
+                elif line_count >= end_idx:
+                    # Stop reading after we have what we need
+                    break
+                line_count += 1
+
     except FileNotFoundError:
         print(f"Warning: {filename} (header) not found. Returning zero tensor.")
         return torch.zeros((1, 1), dtype=torch.long, device=device)
 
-    n = len(lines)
+    n = line_count
     if start_idx >= n:
-        print(f"Warning: start_idx {start_idx} >= number of lines {n} in file {filename}")
+        print(
+            f"Warning: start_idx {start_idx} >= number of lines {n} in file {filename}"
+        )
         return torch.zeros((1, 1), dtype=torch.long, device=device)
 
     end_idx = min(end_idx, n)
-
-    parsed_lines = [parse_line_to_list(line) for line in lines]
-    token_header_pos_emb_list = parsed_lines[start_idx:end_idx]
 
     if not token_header_pos_emb_list:
         print(f"Warning: empty chunk from {start_idx} to {end_idx} in file {filename}")
         return torch.zeros((1, 1), dtype=torch.long, device=device)
 
-    max_len = max(len(seq) for seq in parsed_lines) + 2
     padded_sequences = pad_sequences(token_header_pos_emb_list, max_len)
 
     return torch.tensor(padded_sequences, dtype=torch.long, device=device)
+
 
 # def header_pos(filename, chunk_start, chunk_end):
 #     try:
@@ -84,11 +117,11 @@ def header_pos_safe(filename, start_idx, end_idx, device='cpu'):
 #         exit()
 
 #     token_header_pos_emb_list = []
-    
+
 #     for line in lines:
 #         indices = parse_line_to_list(line)
 #         token_header_pos_emb_list.append(indices)
-    
+
 #     max_len = max(len(seq) for seq in token_header_pos_emb_list)
 #     max_len += 2
 #     padded_sequences = pad_sequences(token_header_pos_emb_list, max_len)
@@ -107,11 +140,11 @@ def header_pos_safe(filename, start_idx, end_idx, device='cpu'):
 #         exit()
 
 #     token_field_pos_emb_list = []
-    
+
 #     for line in lines:
 #         indices = parse_line_to_list(line)
 #         token_field_pos_emb_list.append(indices)
-    
+
 #     max_len = max(len(seq) for seq in token_field_pos_emb_list)
 #     max_len += 2
 #     padded_sequences = pad_sequences(token_field_pos_emb_list, max_len)
@@ -120,5 +153,3 @@ def header_pos_safe(filename, start_idx, end_idx, device='cpu'):
 
 #     # Slice the tensor based on chunk_start and chunk_end
 #     return indices_tensor[chunk_start:chunk_end]
-
-
