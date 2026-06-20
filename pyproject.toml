@@ -8,6 +8,8 @@ dependencies = [
     "boto3>=1.39.16",
     "numpy>=2.3.2",
     "s3fs>=0.4.2",
+    "scapy>=2.7.0",
+    "scikit-learn>=1.9.0",
     "torch>=2.7.1",
     "tqdm>=4.67.1",
 ]
