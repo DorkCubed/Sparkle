@@ -42,6 +42,8 @@ def encode_file(filename, mode="mac"):
             raise ValueError(f"Not enough unique MAC addresses in {filename}")
         mac1, mac2 = [mac.lower() for mac, _ in counts.most_common(2)]
         encoded_lines = [encode_mac_address(line, mac1, mac2) for line in lines]
+        # Fallback: any line not already 1 or 2 after encoding -> "2"
+        encoded_lines = ["2" if l not in ("1", "2") else l for l in encoded_lines]
 
     elif mode == "ip":
         counts = Counter(lines)

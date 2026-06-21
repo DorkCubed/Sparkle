@@ -10,3 +10,14 @@ src/sparkle/logs/
 logs/
 /dataset/local_10/
 docs/
+evaluation/
+data/
+datavol-finetune/
+results/
+checkpoints/
+src/checkpoints/
+*. pth
+*. pdb
+dataset/
+results/
+*. pcap

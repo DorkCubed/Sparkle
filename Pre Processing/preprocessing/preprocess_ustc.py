@@ -28,13 +28,33 @@ for dirname in ("Benign", "Malware"):
     for fname in sorted(os.listdir(dirpath)):
         if not fname.endswith(".pcap"):
             continue
-        pcap_path = os.path.join(dirpath, fname)
+
+        # Skip already-processed files
         out_stem = fname.replace(".pcap", ".txt")
+        if os.path.isfile(os.path.join(outdir, "packets", out_stem)):
+            print(f"  Skipping {fname} (already processed)")
+            continue
+
+        pcap_path = os.path.join(dirpath, fname)
+        pcap_size = os.path.getsize(pcap_path)
+
+        # Skip PCAPs over 500 MB — they need chunking, not unbounded rdpcap()
+        if pcap_size > 500 * 1024 * 1024:
+            print(f"  SKIPPED (too large: {pcap_size/1e9:.2f} GB): {fname}")
+            continue
+
         out_path = os.path.join(outdir, out_stem)
 
         print(f"Processing {pcap_path} -> {outdir}...")
-        process_fields(pcap_path, out_path)
-        process_pcap(pcap_path, out_path)
+        try:
+            process_fields(pcap_path, out_path)
+            process_pcap(pcap_path, out_path)
+        except MemoryError as e:
+            print(f"  SKIPPED (OOM): {pcap_path} — {e}")
+            continue
+        except Exception as e:
+            print(f"  SKIPPED (error): {pcap_path} — {e}")
+            continue
 
 print("\nEncoding direction files...")
 for dirname in ("Benign", "Malware"):
