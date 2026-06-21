@@ -61,8 +61,15 @@ def extract_flow_embeddings(entry, tokenizer, packet_encoder, flow_embedding, fl
     header_lines = open(entry["header"]).read().splitlines()[:max_packets]
     direction_lines = open(entry["direction"]).read().splitlines()[:max_packets]
 
-    # Filter out packets with empty field lines (cause SFBO masking to crash)
-    valid = [i for i, fl in enumerate(field_lines) if fl.strip()]
+    # Single combined filter: keep only rows where all four files have a valid
+    # entry — non-empty field line, direction encoded to 1 or 2, and index
+    # in bounds for all lists (files can have slightly different line counts).
+    n = min(len(hex_dumps), len(field_lines), len(header_lines), len(direction_lines))
+    valid = [
+        i for i in range(n)
+        if field_lines[i].strip()
+        and direction_lines[i].strip() in ("1", "2")
+    ]
     if not valid:
         return []
 
