@@ -4,11 +4,21 @@ from scapy.all import *
 
 
 def process_pcap(filename, outfile):
-
-    # reading the packets and initializing the output file
+    """Original behavior: read the whole PCAP file and dump every packet
+    in capture order. Kept unchanged for backward compatibility."""
     print(f'Generating packet hex for {filename}')
     packets = rdpcap(filename)
+    process_pcap_from_packets(packets, outfile)
 
+
+def process_pcap_from_packets(packets, outfile):
+    """
+    Same per-packet hexdump logic as process_pcap(), but takes an
+    already-loaded list of scapy packets instead of reading a PCAP file
+    itself. This lets callers pass in a single FLOW's packets (e.g. from
+    flow_split.split_pcap_into_flows) instead of an entire file's worth of
+    interleaved, multi-flow traffic.
+    """
     outfile = outfile.rsplit("/", 1)
     if len(outfile) < 2:
         outfile.append(outfile[0])

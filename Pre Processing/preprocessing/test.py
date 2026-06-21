@@ -2,11 +2,20 @@ from scapy.all import *
 
 
 def process_fields(filename, outfile):
-
-    # reading the packets and initializing the output file
+    """Original behavior: read the whole PCAP file and process every
+    packet in capture order. Kept unchanged for backward compatibility."""
     print(f"Generating fields for {filename}")
     packets = rdpcap(filename)
+    process_fields_from_packets(packets, outfile)
 
+
+def process_fields_from_packets(packets, outfile):
+    """
+    Same per-packet field/header extraction logic as process_fields(), but
+    takes an already-loaded list of scapy packets instead of reading a
+    PCAP file itself, so it can be run on a single flow's packets rather
+    than an entire (multi-flow) file.
+    """
     outfile = outfile.rsplit("/", 1)
     if len(outfile) < 2:
         outfile.append(outfile[0])
