@@ -121,6 +121,69 @@ def extract_flow_embeddings(entry, tokenizer, packet_encoder, flow_embedding, fl
             return []
 
 
+def compute_payload_stats(entry, valid_indices=None, max_packets=3000):
+    """Read packet hex dump and compute per-flow payload statistics.
+
+    Each hex line is a full IP packet (headers + payload). We decode the
+    IP header (IHL, Total Length) and TCP/UDP header (Data Offset) to
+    extract how many bytes of application payload each packet carries.
+
+    Returns a dict of 4 summary stats, or all-zeros if parsing fails.
+    """
+    hex_dumps = open(entry["packet"]).read().splitlines()
+    if not hex_dumps:
+        return {"mean_payload": 0, "max_payload": 0, "frac_with_payload": 0, "total_payload": 0}
+
+    hex_dumps = hex_dumps[:max_packets]
+    if valid_indices is not None:
+        hex_dumps = [hex_dumps[i] for i in valid_indices]
+    if not hex_dumps:
+        return {"mean_payload": 0, "max_payload": 0, "frac_with_payload": 0, "total_payload": 0}
+
+    payloads = []
+    for line in hex_dumps:
+        try:
+            raw = bytes.fromhex(line.replace(" ", ""))
+        except ValueError:
+            payloads.append(0)
+            continue
+        if len(raw) < 20:
+            payloads.append(0)
+            continue
+        ip_hdr_len = (raw[0] & 0x0F) * 4
+        if len(raw) < ip_hdr_len:
+            payloads.append(0)
+            continue
+        protocol = raw[9]
+        if protocol == 6:  # TCP
+            if len(raw) < ip_hdr_len + 14:
+                payloads.append(0)
+                continue
+            tcp_hdr_len = ((raw[ip_hdr_len + 12] >> 4) & 0x0F) * 4
+            transport_hdr = tcp_hdr_len
+        elif protocol == 17:  # UDP
+            transport_hdr = 8
+            if len(raw) < ip_hdr_len + 8:
+                payloads.append(0)
+                continue
+        else:
+            payloads.append(0)
+            continue
+        p = len(raw) - ip_hdr_len - transport_hdr
+        payloads.append(max(0, p))
+
+    if not payloads:
+        return {"mean_payload": 0, "max_payload": 0, "frac_with_payload": 0, "total_payload": 0}
+
+    payloads = np.array(payloads, dtype=float)
+    return {
+        "mean_payload": float(payloads.mean()),
+        "max_payload": float(payloads.max()),
+        "frac_with_payload": float((payloads > 0).mean()),
+        "total_payload": float(payloads.sum()),
+    }
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", default="data/ustc_preprocessed_by_flow/manifest.json")
@@ -128,6 +191,17 @@ def main():
     parser.add_argument("--output", default="results/classification_binary")
     parser.add_argument("--max_packets", type=int, default=3000)
     parser.add_argument("--test_size", type=float, default=0.3)
+    parser.add_argument(
+        "--payload", action="store_true",
+        help="Augment embeddings with 4 per-flow payload statistics "
+             "(mean_payload, max_payload, frac_with_payload, total_payload). "
+             "These decode IP/TCP headers from the existing hex dump to "
+             "measure application-layer byte counts per packet. Useful for "
+             "diagnosing whether the pretrained model is discarding an "
+             "obvious structural signal (e.g. Cridex flows have zero "
+             "application payload across all packets, but the model only "
+             "catches 6.5% of them)."
+    )
     parser.add_argument(
         "--no_balance", action="store_true",
         help="Skip capping the benign class to match malware flow count. "
@@ -155,6 +229,7 @@ def main():
     labels = []
     label_names = []
     groups = []  # source PCAP filename per embedding, for leakage-free splitting
+    payload_stats_list = [] if args.payload else None
 
     for entry in manifest:
         # source_pcap is added by preprocess_ustc_by_flow.py. Fall back to
@@ -171,12 +246,50 @@ def main():
             groups.append(group_id)
         print(f"  {entry['flow']:>30}  ->  {len(embs)} chunks")
 
+        if args.payload and embs:
+            # Re-read hex dumps with the same filtering as extract_flow_embeddings
+            hex_dumps = open(entry["packet"]).read().splitlines()
+            hex_dumps = hex_dumps[:args.max_packets]
+            field_lines = open(entry["field"]).read().splitlines()[:args.max_packets]
+            direction_lines = open(entry["direction"]).read().splitlines()[:args.max_packets]
+            n = min(len(hex_dumps), len(field_lines), len(direction_lines))
+            valid = [
+                i for i in range(n)
+                if field_lines[i].strip()
+                and direction_lines[i].strip() in ("1", "2")
+            ]
+            stats = compute_payload_stats(entry, valid_indices=valid, max_packets=args.max_packets)
+            for _ in embs:
+                payload_stats_list.append(stats)
+
     embeddings = np.array(embeddings)
     labels = np.array(labels)
     label_names = np.array(label_names)
     groups = np.array(groups)
     print(f"\nExtracted {len(embeddings)} embeddings, dim={embeddings.shape[1] if embeddings.ndim > 1 else '?'}")
     print(f"From {len(set(groups))} distinct source PCAPs")
+
+    if args.payload:
+        payload_arr = np.array([[s["mean_payload"], s["max_payload"], s["frac_with_payload"], s["total_payload"]]
+                               for s in payload_stats_list])
+        print(f"Payload stats shape: {payload_arr.shape}")
+        print(f"Payload stats range: mean_payload=[{payload_arr[:,0].min():.1f}, {payload_arr[:,0].max():.1f}], "
+              f"max_payload=[{payload_arr[:,1].min():.0f}, {payload_arr[:,1].max():.0f}], "
+              f"frac_with_payload=[{payload_arr[:,2].min():.3f}, {payload_arr[:,2].max():.3f}], "
+              f"total_payload=[{payload_arr[:,3].min():.0f}, {payload_arr[:,3].max():.0f}]")
+        # Quick diagnostic: does flow length (total_payload) separate classes?
+        print(f"\nMean total_payload by class:")
+        print(f"  benign: {payload_arr[labels==0, 3].mean():.0f}  (median={np.median(payload_arr[labels==0, 3]):.0f})")
+        print(f"  malware: {payload_arr[labels==1, 3].mean():.0f}  (median={np.median(payload_arr[labels==1, 3]):.0f})")
+        print(f"Mean frac_with_payload by class:")
+        print(f"  benign: {payload_arr[labels==0, 2].mean():.3f}  (median={np.median(payload_arr[labels==0, 2]):.3f})")
+        print(f"  malware: {payload_arr[labels==1, 2].mean():.3f}  (median={np.median(payload_arr[labels==1, 2]):.3f})")
+        # Per-family diagnostic
+        print(f"\nMean total_payload by malware family:")
+        for fam in sorted(set(label_names[labels == 1])):
+            mask = label_names == fam
+            print(f"  {fam:>10}: n={mask.sum():4d}  total_payload={payload_arr[mask, 3].mean():.0f}  "
+                  f"frac_with_payload={payload_arr[mask, 2].mean():.3f}")
 
     # Binary collapse: label 0 (Benign, per LABEL_MAP in
     # preprocess_ustc_by_flow.py) stays 0; all 10 malware families collapse
@@ -190,8 +303,13 @@ def main():
     labels = (labels != 0).astype(int)
     print(f"\nCollapsed to binary: {np.sum(labels == 0)} benign, {np.sum(labels == 1)} malware")
 
+    X = embeddings
+    if args.payload:
+        X = np.concatenate([X, payload_arr], axis=1)
+        print(f"Augmented feature matrix: {X.shape} (embeddings + 4 payload stats)")
+
     scaler = StandardScaler()
-    X = scaler.fit_transform(embeddings)
+    X = scaler.fit_transform(X)
 
     # GROUPED split: every embedding from the same source PCAP goes
     # entirely into train OR entirely into test, never split across both.
