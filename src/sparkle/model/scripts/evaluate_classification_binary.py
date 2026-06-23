@@ -308,9 +308,6 @@ def main():
         X = np.concatenate([X, payload_arr], axis=1)
         print(f"Augmented feature matrix: {X.shape} (embeddings + 4 payload stats)")
 
-    scaler = StandardScaler()
-    X = scaler.fit_transform(X)
-
     # GROUPED split: every embedding from the same source PCAP goes
     # entirely into train OR entirely into test, never split across both.
     # This prevents the model/classifier from "recognizing the capture
@@ -320,6 +317,12 @@ def main():
     train_idx, test_idx = next(gss.split(X, labels, groups=groups))
 
     X_train, X_test = X[train_idx], X[test_idx]
+    
+    # FIT scaler on train only, transform both train and test
+    # (scaler fitting on test data would be leakage)
+    scaler = StandardScaler()
+    X_train = scaler.fit_transform(X_train)
+    X_test = scaler.transform(X_test)
     y_train, y_test = labels[train_idx], labels[test_idx]
     family_test = label_names[test_idx]  # pre-collapse family name, for per-family breakdown
 
