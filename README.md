@@ -66,9 +66,7 @@ assert not overlap, f"LEAKAGE: PCAPs present in both train and test: {overlap}"
 
 | Split | Accuracy |
 |---|---|
-| Grouped by source PCAP | **[pending correction]** |
-
-> **Note on results pending:** Accuracy results are under verification with corrected StandardScaler logic (fit on train only, transform both train and test). Previous measurements used a leaky scaler that fit on the full dataset before splitting. Corrected evaluation is running.
+| Grouped by source PCAP | **86.0%** |
 
 ---
 
