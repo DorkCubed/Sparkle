@@ -2,8 +2,6 @@
 
 SPARKLE is a research project for network traffic classification using **NetLM**, a two-level transformer pretrained on raw packet bytes. NetLM learns representations of network flows without hand-crafted features — it reads raw hex bytes directly.
 
-> **Note:** Most active development is on the `develop` branch.
-
 ---
 
 ## NetLM Architecture
