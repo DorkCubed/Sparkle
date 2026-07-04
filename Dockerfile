@@ -1,23 +1,19 @@
-FROM pytorch/pytorch:2.7.0-cuda12.4-cudnn9-runtime
+FROM pytorch/pytorch:2.1.2-cuda12.1-cudnn8-runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.cargo/bin:${PATH}"
+ENV PATH="/root/.local/bin:${PATH}"
 
 RUN uv python install 3.12
 
 WORKDIR /app
 
-COPY pyproject.toml .
+COPY pyproject.toml uv.lock .
 COPY src/ src/
 COPY checkpoints/checkpoint_1.pth checkpoints/
-COPY Pre Processing/preprocessing/flow_split.py Pre Processing/preprocessing/
-COPY Pre Processing/preprocessing/pcap_to_packet.py Pre Processing/preprocessing/
-COPY Pre Processing/preprocessing/test.py Pre Processing/preprocessing/
-COPY Pre Processing/preprocessing/preprocess_ustc_by_flow.py Pre Processing/preprocessing/
 
 RUN uv sync --frozen
 

@@ -178,7 +178,7 @@ async def embed(req: EmbedRequest):
         flow_enc, _ = fen(flow_emb, pad_indices)
 
     embeddings = flow_enc.cpu().numpy()
-    flow_vec = embeddings.mean(axis=0).tolist()
+    flow_vec = embeddings.mean(axis=1).tolist()[0]  # [batch, seq, dim] → mean over seq → first batch
 
     return EmbedResponse(
         embedding=flow_vec,
