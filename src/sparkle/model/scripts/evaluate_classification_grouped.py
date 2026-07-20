@@ -4,6 +4,7 @@ import os
 import random
 from collections import Counter
 
+import joblib
 import numpy as np
 import torch
 from sklearn.linear_model import LogisticRegression
@@ -229,6 +230,13 @@ def main():
     print(cm)
 
     os.makedirs(args.output, exist_ok=True)
+    classifier_path = os.path.join(args.output, "classifier.joblib")
+    joblib.dump(
+        {"scaler": scaler, "clf": clf, "classes": clf.classes_.tolist()},
+        classifier_path,
+    )
+    print(f"Saved classifier artifact to {classifier_path}")
+
     with open(os.path.join(args.output, "report.txt"), "w") as f:
         f.write(f"Grouped split (by source PCAP) — test_size={args.test_size}\n")
         f.write(f"Train: {len(X_train)} samples / {len(train_pcaps)} PCAPs\n")

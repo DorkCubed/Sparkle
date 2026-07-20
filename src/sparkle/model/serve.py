@@ -9,6 +9,7 @@ import os
 import random
 from pathlib import Path
 
+import joblib
 import numpy as np
 import torch
 from fastapi import FastAPI, HTTPException
@@ -34,6 +35,7 @@ app = FastAPI(title="SPARKLE Flow Embedding API", version="0.1.0")
 # ---------------------------------------------------------------------------
 _model = None
 _tokenizer = None
+_classifier = None
 
 
 def get_project_root():
@@ -91,6 +93,23 @@ def load_model():
     return _model, _tokenizer
 
 
+def load_classifier():
+    global _classifier
+    if _classifier is not None:
+        return _classifier
+
+    project_root = get_project_root()
+    classifier_path = os.path.join(project_root, "results", "classification", "classifier.joblib")
+    if not os.path.exists(classifier_path):
+        raise RuntimeError(
+            f"Classifier artifact not found: {classifier_path}. "
+            "Generate it by running evaluate_classification_grouped.py first."
+        )
+
+    _classifier = joblib.load(classifier_path)
+    return _classifier
+
+
 # ---------------------------------------------------------------------------
 # Request / Response models
 # ---------------------------------------------------------------------------
@@ -114,20 +133,15 @@ class HealthResponse(BaseModel):
     model_loaded: bool
 
 
-# ---------------------------------------------------------------------------
-# Endpoints
-# ---------------------------------------------------------------------------
-@app.get("/health", response_model=HealthResponse)
-async def health():
-    try:
-        load_model()
-        return HealthResponse(status="ok", device=str(DEVICE), model_loaded=True)
-    except RuntimeError as e:
-        return HealthResponse(status=f"error: {e}", device=str(DEVICE), model_loaded=False)
+class PredictResponse(BaseModel):
+    label: str
+    confidence: float
+    probabilities: dict[str, float]
+    n_packets: int
+    device: str
 
 
-@app.post("/embed", response_model=EmbedResponse)
-async def embed(req: EmbedRequest):
+def compute_flow_embedding(req: EmbedRequest) -> tuple[np.ndarray, int]:
     model, tokenizer = load_model()
     pe = model["packet_encoder"]
     fe = model["flow_embedding"]
@@ -178,10 +192,50 @@ async def embed(req: EmbedRequest):
         flow_enc, _ = fen(flow_emb, pad_indices)
 
     embeddings = flow_enc.cpu().numpy()
-    flow_vec = embeddings.mean(axis=1).tolist()[0]  # [batch, seq, dim] → mean over seq → first batch
+    flow_vec = embeddings.mean(axis=1)[0]
+    return flow_vec, len(valid)
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+@app.get("/health", response_model=HealthResponse)
+async def health():
+    try:
+        load_model()
+        return HealthResponse(status="ok", device=str(DEVICE), model_loaded=True)
+    except RuntimeError as e:
+        return HealthResponse(status=f"error: {e}", device=str(DEVICE), model_loaded=False)
+
+
+@app.post("/embed", response_model=EmbedResponse)
+async def embed(req: EmbedRequest):
+    flow_vec, n_packets = compute_flow_embedding(req)
 
     return EmbedResponse(
-        embedding=flow_vec,
-        n_packets=len(valid),
+        embedding=flow_vec.tolist(),
+        n_packets=n_packets,
+        device=str(DEVICE),
+    )
+
+
+@app.post("/predict", response_model=PredictResponse)
+async def predict(req: EmbedRequest):
+    flow_vec, n_packets = compute_flow_embedding(req)
+    artifact = load_classifier()
+
+    scaler = artifact["scaler"]
+    clf = artifact["clf"]
+    classes = artifact.get("classes", clf.classes_.tolist())
+
+    X = scaler.transform(flow_vec.reshape(1, -1))
+    probs = clf.predict_proba(X)[0]
+    pred_idx = int(np.argmax(probs))
+
+    return PredictResponse(
+        label=str(classes[pred_idx]),
+        confidence=float(probs[pred_idx]),
+        probabilities={str(cls): float(prob) for cls, prob in zip(classes, probs)},
+        n_packets=n_packets,
         device=str(DEVICE),
     )
